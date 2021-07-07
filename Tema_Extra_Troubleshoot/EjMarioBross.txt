@@ -1,0 +1,106 @@
+EJERCICIO SUPER MARIO BROSS					Last Update: 4-Octubre-2020
+=============================
+
+Tenemos una Imagen de contenedor con una aplicación web con el juego de los 80 de Super Mario Bross en:
+
+  	docker.io/dubuqingfeng/docker-web-game
+
+1.- Desplegar la app usando podman en la workstation y acceder con un navegador a la app. (Darle a "Get Started")
+    Una vez desplegada, borrar el contendor y la imagen.
+
+2.- Desplegar la app en el clúster OpenShift con el usuario "developer" en el proyecto "super-mario" con la descripción: "Juego de Nintendo Super Mario Bross" y con el nombre de los recursos "mario". La ruta de la app debe estar en mario-bross.<dominio-ocp>.
+   Una vez desplegada y funcionando, eliminar el proyecto.
+
+3.- Desplegar usando un Dockerfile que está en:
+
+	https://github.com/PengBAI/mariohtml5
+
+  en un proyecto llamado "new-mario" con el usuario "developer" cuyos recursos tendrán el nombre de "new-mario" y que usará la ruta new-mario.<dominio-ocp>.
+
+ ¿Qué tipo de recursos se crean? 
+
+ Una vez desplegada y funcionando, eliminar el proyecto.
+
+NOTA: Usar la documentación del producto, el PDF de "Applicatpoions" si fuese necesario.
+
+
+----------
+PASO 1 - DESPLEGAR CON PODMAN
+----------
+
+1.1.- Pull Imagen
+-----------
+[student@workstation ~]$ sudo podman inspect  docker.io/dubuqingfeng/docker-web-game 
+[student@workstation ~]$ sudo podman pull docker.io/dubuqingfeng/docker-web-game
+
+1.2.- Lanzo Imagen
+-----------
+[student@workstation ~]$ sudo podman run -d -p 8080:80 --name game -d docker.io/dubuqingfeng/docker-web-game  
+[student@workstation ~]$ sudo podman inspect game | grep -i address
+
+1.3.- Paro & Borro Contenedor + Borro Imagen
+-----------
+[student@workstation ~]$ sudo podman stop  game
+[student@workstation ~]$ sudo podman rm -f game
+[student@workstation ~]$ sudo podman rmi docker.io/dubuqingfeng/docker-web-game
+
+----------
+PASO 2 - DESPLEGAR EN OPENSHIFT
+----------
+
+2.1.- Intento de despliegue
+------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc new-project supermario --description="Juego de Nintendo Super Mario Bross"
+[student@workstation ~]$ oc get is -n openshift
+[student@workstation ~]$ oc new-app --name=mario -l game=mario --as-deployment-config httpd~https://docker.io/dubuqingfeng/docker-web-game
+[student@workstation ~]$ oc expose service mario --name=mario 
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc status --suggest
+[student@workstation ~]$ oc logs pod/mario-1-lkjdsl
+[student@workstation ~]$ oc get -o yaml pod <nombre_pod> | oc adm policy scc-subject-review -f -	
+
+2.2.- Crear Service Account
+--------
+# Crear SA
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc create sa mario-sa
+
+# Agregar SCC
+[student@workstation ~]$ oc adm policy add-scc-to-user anyuid -z mario-sa
+
+# Asignar SA a namespace
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc set serviceaccount dc/mario mario-sa
+
+# Verificaciones
+[student@workstation ~]$ oc get pods                                            -> veo redespliegue de pods
+[student@workstation ~]$ oc get rolebinding  					                -> veo que se llama "system:openshift:scc:anyuid"
+[student@workstation ~]$ oc describe rolebinding system:openshift:scc:anyuid	-> Veo que está la SA "mario-sa"
+
+2.3.- Crear la ruta
+--------
+# Localizo la URL del Ingress
+[student@workstation ~]$ oc login -u admin -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+[student@workstation ~]$ oc get pod -n openshift-ingress                        -> miro como se llama uno de los pods <nombre_pod>
+[student@workstation ~]$ oc describe pod <nombre_pod> -n openshift-ingress      -> Busco ROUTER_CANONICAL_HOSTNAME
+
+# Expongo el servicio
+[student@workstation ~]$ oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+[student@workstation ~]$ oc expose svc mario --hostname=mario-bross.<dominio-ocp>
+
+2.4.- Elimina proyect
+--------
+[student@workstation ~]$ oc delete project super-mario
+
+----------
+PASO 3 - DESPLEGAR CON DOCKERFILE
+----------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc new-project new-mario --description="Juego de Nintendo Super Mario Bross"
+[student@workstation ~]$ oc new-app --name=mario -l game=mario --as-deployment-config https://github.com/PengBAI/mariohtml5 --strategy=docker
+[student@workstation ~]$ oc logs -f build/new-mario-1
+[student@workstation ~]$ oc expose svc new-mario --hostname=new-mario.<dominio-ocp>
+[student@workstation ~]$ oc delete project new-mario
+
+###################################################

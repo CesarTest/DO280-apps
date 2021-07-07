@@ -1,0 +1,69 @@
+EJERCICIO HELLO 			Last Update: 4-Octubre-2020
+================
+
+Se desplegará la app "Hello OpenShift" con los requisitos:
+
+	* <nombre>: nombre del alumno
+
+	* Proyecto:
+		Nombre de proyecto: <nombre>-hello
+		Descripción: This is an example project to demonstrate OpenShift
+		Display: Hello OpenShift
+
+	* Crear un repositorio en la cuenta Git del usuario llamado "hello-openshift" que contenga el fichero "hello_openshift.go" 
+
+	* Desplegar la app usando S2I con el usuario "developer" de forma que todos los recursos tengan el mismo nombre "hello".
+
+	* Crear una ruta con la URL: hello-<nombre>.<dominio_OCP>.
+
+	* Una vez desplegada, cambiar el mensaje que da la app usando en la variable de entorno del contenedor del pod "RESPONSE" el valor "Hola OpenShift".
+
+	¡OJO! No se pide cambiar el código fuente de la app
+
+	* Borrar el proyecto creado una vez terminado
+
+---------
+PASO 1 - CREAR Proyecto
+---------
+[student@workstation ~]$ oc login -u developer -p developer 
+[student@workstation ~]$ oc new-project cesar-hello --description='This is an example project to demonstrate OpenShift' --display-name='Hello OpenShift'
+[student@workstation ~]$ oc describe projects cesar-hello 
+
+---------
+PASO 2 - CREAR Repositorio GitHub
+---------
+
+..... PC Cesar
+[C:\git folder]$ git config --global user.email "andepiel45@hotmail.com"
+[C:\git folder]$ git config --global user.name "Cesar"
+[C:\git folder]$ git init
+[C:\git folder]$ git add .
+[C:\git folder]$ git commit -m "Incluye Fichero"
+[C:\git folder]$ git remote add CesarTest https://github.com/CesarTest/hello-openshift.git
+[C:\git folder]$ git remote -v
+[C:\git folder]$ git push --set-upstream CesarTest master
+
+---------
+PASO 3 - CREAR Aplicacion
+---------
+..... De vuelta entorno trabajo RedHat
+[student@workstation ~]$ mkdir cesar-hello
+[student@workstation ~]$ cd cesar-hello
+
+..... 3.1.- Source-to-Image... Compilando applicacion
+[student@workstation ~]$ oc get is -n openshift | grep golang
+[student@workstation ~]$ oc describe is -n openshift golang
+[student@workstation ~]$ oc new-app --name=hello -l app=cesar-hello --as-deployment-config golang~https://github.com/CesarTest/hello-openshift.git
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc get all --show-labels
+
+..... 3.2.- No está el servicio... ¿donde expone puerto el POD?: buscar codigo fuente
+[student@workstation ~]$ oc logs -f hello-2-asjdaldsa 
+[student@workstation ~]$ oc expose dc/hello --target-port=8080 --port=80
+
+---------
+PASO 4 - Visibilidad externa
+---------
+[student@workstation ~]$ oc expose service hello --name=hello --hostname=hello-cesar.${RHT_OCP4_WILDCARD_DOMAIN}
+[student@workstation ~]$ oc describe dc/hello
+[student@workstation ~]$ oc set env dc/hello RESPONSE="Hola OpenShift"

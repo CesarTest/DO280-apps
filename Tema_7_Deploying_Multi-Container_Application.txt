@@ -1,0 +1,294 @@
+=========================
+TEMA 7 - DEPLOYING MULTI-CONTAINER APPLICATIONS
+=========================
+
+----------
+GUIDED EXTRA -
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab multicontainer-design start
+
+1.- Crear Imagen MySQL
+--------
+[student@workstation ~]$ cd ~/DO180/labs/multicontainer-design/images/mysql
+[student@workstation mysql]$ sudo podman build -t do180/mysql-57-rhel7 --layers=false .
+[student@workstation mysql]$ sudo podman images
+
+
+2.- Crear Imagen Frontal 
+--------
+[student@workstation mysql]$ cat /home/student/DO180/labs/multicontainer-design/images/nodejs/Dockerfile
+[student@workstation ~]$ cd ~/DO180/labs/multicontainer-design/images/nodejs
+[student@workstation nodejs]$ sudo podman build -t do180/nodejs --layers=false .
+[student@workstation nodejs]$ sudo podman images --format "table {{.ID}} {{.Repository}} {{.Tag}}"
+
+3.- Editar aplicacion para que se hablen ambos contenedores
+--------
+[student@workstation mysql]$ cat /home/student/DO180/labs/multicontainer-design/deploy/nodejs/Dockerfile  
+[student@workstation mysql]$ cat /home/student/DO180/labs/multicontainer-design/deploy/nodejs/nodejs-source/models/db.js
+
+module.exports.params = {
+ dbname: process.env.MYSQL_DATABASE,
+ username: process.env.MYSQL_USER,
+ password: process.env.MYSQL_PASSWORD,
+ params: {
+ host: "10.88.100.101",
+ port: "3306",
+ dialect: 'mysql'
+ }
+};
+
+[student@workstation nodejs]$ cd ~/DO180/labs/multicontainer-design/deploy/nodejs
+[student@workstation nodejs]$ ./build.sh
+[student@workstation nodejs]$ sudo podman images --format "table {{.ID}} {{.Repository}} {{.Tag}}"
+
+
+4.- Editar Nodejs deploy
+--------
+[student@workstation nodejs]$ vim ~/DO180/labs/multicontainer-design/deploy/nodejs/networked/run.sh
+
+sudo podman run -d --name mysql -e MYSQL_DATABASE=items -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55 -e MYSQL_ROOT_PASSWORD=r00tpa55 -v $PWD/work/data:/var/lib/mysql/data -v $PWD/work/init:/var/lib/mysql/init -p 30306:3306 --ip 10.88.100.101 do180/mysql-57-rhel7 
+
+sudo podman run -d --name todoapi -e MYSQL_DATABASE=items -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55 -p 30080:30080 do180/todonodejs
+
+[student@workstation nodejs]$ cat ~/DO180/labs/multicontainer-design/deploy/nodejs/networked/run.sh 
+[student@workstation nodejs]$ cat /home/student/DO180/solutions/multicontainer-design/deploy/nodejs/networked/run.sh
+
+5.- Run Containers
+--------
+[student@workstation nodejs]$ cd /home/student/DO180/labs/multicontainer-design/deploy/nodejs/networked
+[student@workstation networked]$ ./run.sh
+[student@workstation networked]$ sudo podman ps --format="table {{.ID}} {{.Names}} {{.Image}} {{.Status}}"
+
+6.- Dump environment
+--------
+[student@workstation networked]$ sudo podman exec -it todoapi env
+
+
+7.- Verify
+---------
+[student@workstation networked]$ curl -w "\n"  http://127.0.0.1:30080/todo/api/items/1
+
+Firefox -> http://127.0.0.1:30080/todo/
+
+8.- End
+---------
+[student@workstation ~]$ lab multicontainer-design finish
+
+----------
+GUIDED 1 - APPLICATION DEPLOYMENT
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab multicontainer-openshift start
+
+1.- Create MySQL image
+--------
+[student@workstation ~]$ cd ~/DO180/labs/multicontainer-openshift/images/mysql
+[student@workstation mysql]$ sudo podman build -t do180-mysql-57-rhel7 .
+[student@workstation mysql]$ source /usr/local/etc/ocp4.config
+[student@workstation mysql]$ sudo podman login quay.io -u ${RHT_OCP4_QUAY_USER}
+[student@workstation mysql]$ sudo podman tag do180-mysql-57-rhel7 quay.io/${RHT_OCP4_QUAY_USER}/do180-mysql-57-rhel7
+[student@workstation mysql]$ sudo podman push quay.io/${RHT_OCP4_QUAY_USER}/do180-mysql-57-rhel7
+
+2.- Create Node.js image
+--------
+[student@workstation mysql]$ cd ~/DO180/labs/multicontainer-openshift
+[student@workstation multicontainer-openshift]$ cd images/nodejs
+[student@workstation nodejs]$ sudo podman build --layers=false -t do180-nodejs .
+
+3.- Update Node.js image... include application into de image, then push to QUAY.IO
+-------
+[student@workstation nodejs]$ cd ~/DO180/labs/multicontainer-openshift
+[student@workstation multicontainer-openshift]$ cd deploy/nodejs
+[student@workstation nodejs]$ ./build.sh
+[student@workstation nodejs]$ sudo podman tag do180/todonodejs quay.io/${RHT_OCP4_QUAY_USER}/do180-todonodejs
+[student@workstation nodejs]$ sudo podman push quay.io/${RHT_OCP4_QUAY_USER}/do180-todonodejs
+
+4.- Create project and Launch application from template 
+-------
+[student@workstation nodejs]$ oc login -u ${RHT_OCP4_DEV_USER} -p ${RHT_OCP4_DEV_PASSWORD} ${RHT_OCP4_MASTER_API}
+[student@workstation nodejs]$ oc new-project ${RHT_OCP4_DEV_USER}-template
+[student@workstation nodejs]$ cat /home/student/DO180/labs/multicontainer-openshift/todo-template.json
+[student@workstation nodejs]$ cd /home/student/DO180/labs/multicontainer-openshift
+[student@workstation multicontainer-openshift]$ oc process -f todo-template.json -p RHT_OCP4_QUAY_USER=${RHT_OCP4_QUAY_USER} | oc create -f -
+[student@workstation multicontainer-openshift]$ oc get pods -w
+
+5.- Expose Aspplication
+-------
+[student@workstation multicontainer-openshift]$ oc expose service todoapi 
+[student@workstation multicontainer-openshift]$ oc expose service todoapi --hostname=http://todoapi-${RHT_OCP4_QUAY_USER}-template.${RHT_OCP4_WILDCARD_DOMAIN}/todo/
+
+6.- Verify Application
+-------
+[student@workstation multicontainer-openshift]$ oc status | grep -o "http:.*com"
+[student@workstation multicontainer-openshift]$ curl -w "\n" $(oc status | grep -o "http:.*com")/todo/api/items/
+
+Firefox -> http://todoapi-${RHT_OCP4_QUAY_USER}-template.${RHT_OCP4_WILDCARD_DOMAIN}/todo/
+
+7.- Finish 
+-------
+[student@workstation ~]$ lab multicontainer-openshift finish
+
+----------
+LAB - APPLICATION DEPLOYMENT
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab comprehensive-review start
+
+
+1.- Create container image & start an instance of Nexus Server
+--------
+.... 1.1.- Retrieve Source Code
+[student@workstation] cd /home/student/DO180/labs/comprehensive-review/image
+[student@workstation image] get-nexus-bundle.sh
+
+.... 1.2.- Create Image
+[student@workstation image] vim Dockerfile
+
+#------------------------------
+# CREATE NEXUS IMAGE
+#------------------------------
+
+# 1.- Image Description
+FROM ubi7/ubi:7.7
+
+MAINTAINER Cesar Delgado <andepiel45@hotmail.com>
+
+ARG NEXUS_VERSION=2.14.3-02  
+ENV NEXUS_HOME=/opt/nexus
+
+# 2.- Add extra repository
+#COPY training.repo /etc/yum.repos.d/training.repo
+
+# 3.- Install required packages
+RUN yum install -y --setopt=tsflags=nodocs java-1.8.0-openjdk-devel && \
+    yum clean all
+
+# 4.- Create Users
+RUN groupadd -r nexus -f -g 1001 && \
+    useradd -u 1001 -r -g nexus -m -d ${NEXUS_HOME} -s /sbin/nologin -c "Nexus User" nexus && \
+    chown -R nexus:nexus ${NEXUS_HOME} && \
+    chmod -R 755 ${NEXUS_HOME}
+	
+# 5.- Prepate Launching Process 	
+USER nexus
+ADD ./nexus-2.14.3-02-bundle.tar.gz ${NEXUS_HOME}/ 
+ADD ./nexus-start.sh ${NEXUS_HOME}/ 
+RUN ln -s ${NEXUS_HOME}/nexus-${NEXUS_VERSION} ${NEXUS_HOME}/nexus2
+
+# 6.- Launcher
+WORKDIR ${NEXUS_HOME}
+VOLUME ["/opt/nexus/sonatype-work"]
+CMD ["sh", "nexus-start.sh"]
+
+#------------------------------
+# END CREATE NEXUS IMAGE
+#------------------------------
+
+[student@workstation image] sudo podman build --layers=false -t nexus .
+
+
+2.- Run application & Verify
+--------
+[student@workstation image]$ /home/student/DO180/labs/comprehensive-review/deploy/local/run-persistent.sh
+[student@workstation image]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Image}}"
+[student@workstation image]$ sudo podman inspect -f '{{.NetworkSettings.IPAddress}}' <name>
+[student@workstation image]$ curl -v 10.88.100.105:8081/nexus/ 2>&1  | grep -E 'HTTP|<title>'
+[student@workstation image]$ sudo podman kill <name>
+
+3.- Deploy application using OpenShift
+--------
+.... 3.1.- Label and Upload Image
+[student@workstation image]$ sudo podman tag quay.io/${RHT_OCP4_QUAY_USER}/nexus:latest <name>
+[student@workstation image]$ sudo podman login quay.io -u ${RHT_OCP4_QUAY_USER}
+[student@workstation image]$ sudo podman push  quay.io/${RHT_OCP4_QUAY_USER}/nexus:latest
+
+.... 3.2.- Create Project
+[student@workstation image]$ oc login
+username: developer
+password: developer
+
+[student@workstation image]$ oc new-project ${RHT_OCP4_DEV_USER}-review
+[student@workstation image]$ cd ../
+[student@workstation comprensive-review]$ oc process -o json -f deploy/openshift/resources/nexus-template.json -p RHT_OCP4_QUAY_USER=${RHT_OCP4_QUAY_USER} | oc create -f -
+[student@workstation comprensive-review]$ oc get pods
+[student@workstation comprensive-review]$ oc expose service nexus 
+[student@workstation comprensive-review]$ echo http://nexus-${RHT_OCP4_DEV_USER}-review.${RHT_OCP4_WILDCARD_DOMAIN}/nexus/
+
+Firefox ->  http://nexus-developer-review.apps.oc4.example.com/nexus/
+Firefox ->  http://nexus-developer-review.apps.oc4.example.com:8080  ====> ?????????
+
+[student@workstation comprensive-review}$ cd ~
+
+4.- Finish
+-------
+[student@workstation ~]$ lab comprehensive-review grade
+[student@workstation ~]$ lab comprehensive-review finish
+
+----------
+LAB EXTRA - Deploying Multi-Container Applications
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab multicontainer-review start
+[student@workstation ~]$ cd ~/DO180/labs/multicontainer-review
+
+1.- OpenShift Login + Create New Project
+--------
+[student@workstation multicontainer-review]$ oc login
+username: developer
+password: developer
+
+[student@workstation multicontainer-review]$ oc new-project ${RHT_OCP4_DEV_USER}-deploy
+
+2.- Build MySQL image + publish in Quaio repo
+--------
+[student@workstation multicontainer-review]$ cd images/mysql
+[student@workstation mysql] sudo podman build -t mysql .
+[student@workstation mysql]$ sudo podman login quay.io -u ${RHT_OCP4_QUAY_USER}
+[student@workstation mysql]$ sudo podman push mysql quay.io/${RHT_OCP4_QUAY_USER}/do180-multicontainer-mysql:latest
+
+3.- Build PHP image + publish in Quaio repo
+--------
+[student@workstation mysql]$ cd ../quote-php
+[student@workstation quote-php] sudo podman build -t quote-php .
+[student@workstation quote-php]$ sudo podman login quay.io -u ${RHT_OCP4_QUAY_USER}
+[student@workstation quote-php]$ sudo podman push  quote-php quay.io/${RHT_OCP4_QUAY_USER}/do180-multicontainer-quote-php:latest
+
+4.- Review JSON template
+--------
+[student@workstation quote-php]$ cd /home/student/DO180/labs/multicontainer-review/
+[student@workstation multicontainer-review]$ vim ./*.json
+
+5.- Add template to your project
+--------
+[student@workstation multicontainer-review]$ oc create -f ./quote-php-template.json
+
+6.- Process template
+--------
+[student@workstation multicontainer-review]$ oc process -o json -f ./quote-php-template.json -p RHT_OCP4_QUAY_USER=${RHT_OCP4_QUAY_USER} | oc create -f -
+[student@workstation comprensive-review]$ oc get pods
+
+7.- Expose service
+--------
+[student@workstation comprensive-review]$ oc get service
+[student@workstation comprensive-review]$ oc expose service quote-php
+[student@workstation comprensive-review]$ oc get route
+
+8.- Test Application
+--------
+[student@workstation comprensive-review]$ oc status | grep -o "http:.*com"
+[student@workstation comprensive-review]$ curl http://quote-php-developer-deploy.apps.ocp4.example.com
+Firefox -> http://quote-php-developer-deploy.apps.ocp4.example.com
+
+9.- Finish
+--------
+[student@workstation ~]$ lab multicontainer-review grade
+[student@workstation ~]$ lab multicontainer-review finish

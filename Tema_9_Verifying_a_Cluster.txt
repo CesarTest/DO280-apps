@@ -1,0 +1,115 @@
+=========================
+TEMA 9 - VERIFYING A CLUSTER
+=========================
+
+----------
+GUIDED 1 - Troubleshooting OpenShift Clusters and Applications
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab execute-troubleshoot start
+
+1.- Logging Cluster + Inspect
+--------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc get nodes
+[student@workstation ~]$ oc adm top node
+[student@workstation ~]$ oc describe node master01
+
+2.- Check Logs: internal registry operator, internal registry server, Kubelet
+--------
+[student@workstation ~]$ oc get pod -n openshift-image-registry
+[student@workstation ~]$ oc logs --tail 3 -n openshift-image-registry cluster-image-registry-operator-564bd5dd8f-s46bz
+[student@workstation ~]$ oc logs --tail 3 -n openshift-image-registry -c cluster-image-registry-operator cluster-image-registry-operator-564bd5dd8f-s46bz
+[student@workstation ~]$ oc logs --tail 1 -n openshift-image-registry image-registry-794dfc7978-w7w69
+[student@workstation ~]$ oc adm node-logs --tail 1 -u kubelet master01
+
+3.- Check Logs from Shell
+--------
+[student@workstation ~]$ oc debug node/master01
+sh-4.2# chroot /host
+sh-4.2# systemctl status kubelet
+sh-4.2# systemctl status cri-o
+sh-4.2# crictl ps --name openvswitch
+sh-4.4# exit
+sh-4.4# exit
+
+4.- Execute troubleshooter project
+--------
+[student@workstation ~]$ oc project execute-troubleshoot
+[student@workstation ~]$ oc get pod
+[student@workstation ~]$ oc status
+[student@workstation ~]$ oc get events
+[student@workstation ~]$ skopeo inspect docker://registry.access.redhat.com/rhscl/postgresq-96-rhel7:1
+[student@workstation ~]$ skopeo inspect docker://registry.access.redhat.com/rhscl/postgresql-96-rhel7:1
+[student@workstation ~]$ skopeo inspect docker://registry.access.redhat.com/rhscl/postgresql-96-rhel7:1
+[student@workstation ~]$ oc edit deployment/psql
+[student@workstation ~]$ oc status
+[student@workstation ~]$ oc get pods
+
+5.- Finish
+--------
+[student@workstation ~]$ lab execute-troubleshoot finish
+
+
+----------
+GUIDED 2 - Introducing OpenShift Dynamic Storage
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab install-storage start
+
+
+1.- Log to Cluster
+--------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+
+2.- Create Project 
+--------
+[student@workstation ~]$ oc new-project install-storage
+
+3.- Check StorageClass
+--------
+[student@workstation ~]$ oc get storageclass
+
+4.- Deploy Application
+--------
+[student@workstation ~]$ oc new-app --name postgresql-persistent  --docker-image registry.redhat.io/rhel8/postgresql-12:1-43  -e POSTGRESQL_USER=redhat  -e POSTGRESQL_PASSWORD=redhat123  -e POSTGRESQL_DATABASE=persistentdb
+
+5.- Assign Volumes 
+--------
+[student@workstation ~]$ oc set volumes deployment/postgresql-persistent  --add --name postgresql-storage --type pvc --claim-class nfs-storage  --claim-mode rwo --claim-size 10Gi --mount-path /var/lib/pgsql  --claim-name postgresql-storage
+[student@workstation ~]$ oc get pvc
+[student@workstation ~]$ oc get pv -o custom-columns=NAME:.metadata.name,CLAIM:.spec.claimRef.name
+
+6.- Install Storage 
+--------
+[student@workstation ~]$ cd ~/DO280/labs/install-storage
+[student@workstation install-storage]$ ./init_data.sh
+[student@workstation install-storage]$ ./check_data.sh
+
+7.- Delete Project... Re-Deploy now with persistent volume 
+--------
+[student@workstation install-storage]$ oc delete all -l app=postgresql-persistent
+[student@workstation install-storage]$ oc new-app --name postgresql-persistent2  --docker-image registry.redhat.io/rhel8/postgresql-12:1-43  -e POSTGRESQL_USER=redhat  -e POSTGRESQL_PASSWORD=redhat123 -e POSTGRESQL_DATABASE=persistentdb
+[student@workstation install-storage]$ ./check_data.sh
+[student@workstation install-storage]$ oc set volumes deployment/postgresql-persistent2 --add --name postgresql-storage --type pvc --claim-name postgresql-storage --mount-path /var/lib/pgsql
+[student@workstation install-storage]$ ./check_data.sh
+
+8.- Clean Project  
+--------
+[student@workstation install-storage]$ oc delete all -l app=postgresql-persistent2
+[student@workstation install-storage]$ oc delete pvc/postgresql-storage
+[student@workstation install-storage]$ cd
+
+
+9.- Finish
+--------
+[student@workstation ~]$ lab install-storage finish
+
+
+

@@ -1,0 +1,51 @@
+EJERCICIO PACMAN - PARTE 1		SOLUCIÓN				Last Update: 9-Septiembre-2020
+============================
+
+Dado el código fuente que está en:
+
+	https://github.com/burrsutter/pacman
+
+1.- Clonarlo en el GitHub del usuario.
+
+2.- Con el usuario "developer", crear un proyecto llamado "pacman" donde se desplegará dicha app. El nombre de todos los recursos debe ser "mipacman"
+
+3.- Crear una ruta para poder acceder a la app pacman desde fuera del cluster OCP
+
+SOLUCIÓN
+----------
+
+1.- Clonar el código en el GitHub del usuario:
+
+ 1.1.- Desde un navegador, entrar en https://github.com y hacer login con usuario y password
+
+ 1.2.- En el mismo navegador, acceder a la URL: https://github.com/burrsutter/pacman y darle a "Fork".
+
+2.- Desplegar la app:
+ 
+ 2.1.- Hago login en el clúster OCP:
+
+	oc login -u ${RHT_OCP4_DEV_USER} -p  ${RHT_OCP4_DEV_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+ 2.2.- Creo el proyecto:
+
+	oc new-project <nombre>-pacman
+
+ 2.3.- Despliego la app:
+
+	oc new-app https://github.com/<GITHUB-USER>/pacman --name=mipacman --as-deployment-config
+
+ 2.4.- Veo el proceso de construcción:
+
+	oc logs -f mipacman-1-build
+
+3.- Creo la ruta:
+
+	oc expose svc mipacman
+	MIRUTA=$(oc get route mipacman -o=custom-columns=RUTA:.spec.host --no-headers)
+	
+  En un navegador accedo a $MIRUTA
+
+NO BORRAR EL PROYECTO - CONTINUA EN PARTE 2
+FIN
+
+

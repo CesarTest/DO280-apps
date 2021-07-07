@@ -1,0 +1,156 @@
+EJERCICIO SUPER MARIO BROSS	- SOLUCIÓN				Last Update: 20-Mayo-2021
+=============================
+
+Tenemos una Imagen de contenedor con una aplicación web con el juego de los 80 de Super Mario Bross en:
+
+  	docker.io/dubuqingfeng/docker-web-game
+
+1.- Desplegar la app usando podman en la workstation y acceder con un navegador a la app. (Darle a "Get Started")
+    Una vez desplegada, borrar el contendor y la imagen.
+
+2.- Desplegar la app en el clúster OpenShift con el usuario "developer" en el proyecto "super-mario" con la descripción: "Juego de Nintendo Super Mario Bross" y con el nombre de los recursos "mario". La ruta de la app debe estar en mario-bross.<dominio-ocp>.
+   Una vez desplegada y funcionando, eliminar el proyecto.
+
+3.- Desplegar usando un Dockerfile que está en:
+
+	https://github.com/PengBAI/mariohtml5
+
+  en un proyecto llamado "new-mario" con el usuario "developer" cuyos recursos tendrán el nombre de "new-mario" y que usará la ruta new-mario.<dominio-ocp>.
+
+ ¿Qué tipo de recursos se crean? 
+
+ Una vez desplegada y funcionando, eliminar el proyecto.
+
+NOTA: Usar la documentación del producto, el PDF de "Applications" si fuese necesario.
+
+
+SOLUCIÓN
+=========
+
+1.- Despliego la app usando Podman:
+
+  hago pull de la imagen:
+
+	sudo podman pull docker.io/dubuqingfeng/docker-web-game
+
+  arranco un contenedor llamado "game":
+
+	sudo podman run -d --name=game docker.io/dubuqingfeng/docker-web-game
+
+  veo en qué IP levanta el contendor:
+
+	sudo podman inspect game | grep -i address
+
+ con un navegador accedo a dicha web y veo que el juego funciona
+
+  elimino el contenedor en ejecución y su imagen:
+
+	sudo podman rm -f game
+	sudo podman rmi docker.io/dubuqingfeng/docker-web-game
+
+2.- Despliego la app en OpenShift:
+
+ hago login con el usuario developer:
+
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+ creo el proyecto:
+
+	oc new-project super-mario --description="Juego de Nintendo Super Mario Bross"
+
+ despliego la app usando la imagen:
+	
+	oc new-app --docker-image=docker.io/dubuqingfeng/docker-web-game --name=mario
+ 
+ veo el pod:
+	
+	oc get pod -> Problema
+
+ veo que pasa:
+
+	oc status --suggest		-> El pod se reinicia continuamente
+
+ veo los logs del pod:
+
+	oc logs <nombre_pod>		-> Problema de permisos, el usuario no privilegiado con el que levanta el 
+					   proceso principal del contenedor no puede acceder a un directorio en /var/log
+					     -> Problema de SCC default
+ veo cual es la SCC que debe usar el pod:
+
+	oc get -o yaml pod <nombre_pod> | oc adm policy scc-subject-review -f -		-> veo anyuid
+
+ creo una service account para el pod:
+
+	oc create sa mario-sa
+
+ con usuario con privilegios de cluster-admin, asocio esta SA a la SCC anyuid:
+
+	oc login -u admin -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+	oc adm policy add-scc-to-user anyuid -z mario-sa
+
+ Verificación:
+	oc get rolebinding  					-> veo que se llama "system:openshift:scc:anyuid"
+	oc describe rolebinding system:openshift:scc:anyuid	-> Veo que está la SA "mario-sa"
+
+ vuelvo al usuario developer y modifico la SA que usa el Deploy de la app:
+
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+	oc set serviceaccount deployment mario mario-sa
+	
+ veo que ahora si despliega el pod:
+
+	oc get pod
+
+ para crear la ruta, miro cual es el dominio de OpenShift, primero buscando los pods del router (que están en el proyecto openshift-ingress) siendo usuario cluster-admin: 
+
+	oc login -u admin -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+	oc get pod -n openshift-ingress   -> miro como se llama uno de los pods <nombre_pod>
+
+  veo su descripción y busco el valor de la variable ROUTER_CANONICAL_HOSTNAME, ese será el <dominio-ocp>:
+
+	oc describe pod <nombre_pod> -n openshift-ingress  	
+
+  vuelvo al usuario developer: 
+
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+ usando ese dominio, hago:
+	oc expose svc mario --hostname=mario-bross.<dominio-ocp>
+ 
+ con un navegador accedo a la URL mario-bross.<dominio-ocp> y veo que funciona
+
+ elimino el proyecto:
+
+	oc delete project super-mario
+
+3.- Despliego usando el Dockerfile:
+
+  creo el proyecto:
+
+	oc new-project new-mario
+
+  despliego la app:
+
+	oc new-app https://github.com/PengBAI/mariohtml5 --name new-mario
+
+  veo la construcción:
+
+	oc logs -f build/new-mario-1
+ 
+  creo la ruta:
+
+	oc expose svc new-mario --hostname=new-mario.<dominio-ocp>
+
+ con un navergador accedo a la ruta new-mario.<dominio-ocp> y veo que funciona
+
+  borro el proyecto:
+
+	oc delete project new-mario
+
+ Se crean los recursos de BC, Deployment, IS de la app, IS de la imagen del FROM, SVC
+
+FIN
+

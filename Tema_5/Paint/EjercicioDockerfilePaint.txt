@@ -1,0 +1,18 @@
+EJERCICIO DOCKERFILE BÁSICO			Last Update: 7-Septiembre-2020
+============================
+
+
+1.- Se escribirá un Dockerfile con los siguientes requisitos:
+
+	- La imagen base es ubi7 del registry público de Red Hat registry.access.redhat.com
+
+	- Levantará un servidor web Apache que use los ficheros; "index.html", "flow.js", "main.js", "perlin.js" y "utils.js" que están en el 
+	  fichero tar "paint.tar".
+
+	- Usará el puerto 8080 y usuario no privilegiado
+
+2.- Se construirá la imagen de contendor con el nombre "paint" y se arrancará un contenedor de ella en el puerto 8080 de workstation para verificar que funciona.
+
+3.- Se subirá la imagen de contendor a la cuenta Quay.io del usuario.
+
+4.- Se subirán los ficheros del ejercicio y el Dockerfile al GitHub del usuario en un repositorio con nombre "paint".

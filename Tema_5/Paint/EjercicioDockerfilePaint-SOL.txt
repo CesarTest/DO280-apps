@@ -1,0 +1,118 @@
+EJERCICIO DOCKERFILE BÁSICO			Last Update: 7-Septiembre-2020
+============================
+
+1.- Se escribirá un Dockerfile con los siguientes requisitos:
+
+	- La imagen base es ubi7 del registry público de Red Hat registry.access.redhat.com
+
+	- Levantará un servidor web Apache que use los ficheros; "index.html", "flow.js", "main.js", "perlin.js" y "utils.js" que están en el 
+	  fichero tar "paint.tar".
+
+	- Usará el puerto 8080 y usuario no privilegiado
+
+2.- Se construirá la imagen de contendor con el nombre "paint" y se arrancará un contenedor de ella en el puerto 8080 de workstation para verificar que funciona.
+
+3.- Se subirá la imagen de contendor a la cuenta Quay.io del usuario.
+
+4.- Se subirán los ficheros del ejercicio y el Dockerfile al GitHub del usuario en un repositorio con nombre "paint".
+
+
+
+SOLUCIÓN
+=========
+
+1.- Escribo el Dockerfile:
+
+ 1.1.- Busco la imagen de ubi7 en registry.access.redhat.com
+
+    Reviso la configuración de los registries donde mi sistema "workstation" hace las búsquedas con "podman search":
+
+	sudo vim /etc/containers/registries.conf	-> En el bloque "registries.search" debe aparecer "registry.access.redhat.com"
+
+    Hago la búsqueda:
+	
+	sudo podman search ubi7		-> la imagen base a usar es "registry.access.redhat.com/ubi7/ubi"
+
+ 1.2.- Miro cuál es el fichero de configuración de Apache para buscar el document root y el puerto donde escucha:
+
+	sudo podman pull registry.access.redhat.com/ubi7/ubi
+	sudo podman images					-> Veo que está en la caché local
+	sudo podman run --rm -it ubi bash			-> Levanto un contenedor de la imagen y me conecto a él
+  
+	> yum install httpd -y
+	> rpm -ql httpd | grep conf				-> el archivo de configuración es "/etc/httpd/conf/httpd.conf"
+	> cat /etc/httpd/conf/httpd.conf | grep -i document 	-> veo la línea     DocumentRoot "/var/www/html"
+	> cat /etc/httpd/conf/httpd.conf | grep -i listen	-> veo la línea     Listen 80
+	> exit
+
+ 1.3.- Creo el directorio de trabajo y obtengo los ficheros necesarios:
+
+	mkdir -p ~/Apps/paint
+	cd ~/Apps/paint
+	cp <ruta>/paint.tar ./
+	tar xvf paint.tar  
+
+ 1.4.- Escribo el Dockerfile:
+
+	vim ~/Apps/paint/Dockerfile
+
+	--------------------------------------------------------
+	FROM registry.access.redhat.com/ubi7/ubi
+	
+	MAINTAINER Marta marmarti@redhat.com
+	
+	USER root
+
+	RUN yum update -y && yum install httpd -y && yum clean all
+
+	COPY index.html flow.js main.js perlin.js utils.js /var/www/html/
+
+	EXPOSE 8080
+
+	RUN sed -i "s/Listen 80/Listen 8080/g" /etc/httpd/conf/httpd.conf
+
+	RUN chgrp -R 0 /var/log/httpd /var/run/httpd && chmod -R g=u /var/log/httpd /var/run/httpd
+
+	USER 1001
+
+	ENTRYPOINT ["httpd","-D","FOREGROUND"]
+	---------------------------------------------------------
+
+2.- Construyo la IC:
+
+	cd ~/Apps/paint
+	sudo podman build -t paint .
+
+3.- Subo la IC a Quay.io:
+
+ 3.1.- Tagueo la imagen con el nombre correcto:
+
+	sudo podman tag paint quay.io/<USUARIO_QUAY>/paint
+
+ 3.2.- Hago login en Quay.io con mi usuario:
+
+	sudo podman login -u <USUARIO_QUAY> -p <PASSWORD_QUAY> quay.io
+
+ 3.3.- Subo la imagen:
+
+	sudo podman push quay.io/<USUARIO_QUAY>/paint
+
+ 3.4.- Arranco un contenedor de la app y enlazo el puerto 8080 de "workstation" con el puerto 8080 del contenedor:
+
+	sudo podman run -d -p 8080:8080 paint
+
+   Desde un navegador, accedo a la app con http://localhost:8080
+
+4.- Subo los ficheros a GitHub:
+
+ 4.1.- Creo el repositorio en GitHub accediendo a mi cuenta -> "Repositories" -> botón "New" y en "Repository name", pongo de nombre "paint", 
+	marco "Initialize this repository with a README" y le doy al botón "Create repository" y completo el README.
+	
+ 4.2.- En el directorio de código del paint local hago:
+	git init
+	git add .
+	git commit -m "primer commit"
+	git remote add origin https://github.com/<USUARIO-GITHUB>/paint
+	git push -u origin master
+
+FIN

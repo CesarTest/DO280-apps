@@ -1,0 +1,97 @@
+======================
+REPASO
+======================
+
+CFIC... revisión
+=> Carta: https://drive.google.com/file/d/1QRSI7qftU-CASs4ORS3_tGQmOwdmhleV/view?usp=sharing
+=> Comandos: https://drive.google.com/file/d/1bmqLI4QCEowyUgGl_sFRYUoNllr6Qm0s/view?usp=sharing 
+
+
+Optimizacion DockerFile => DO285 => Tema 5 => Ex1 + Lab
+Optimizacion DockerFile => DO288 => Tema 2 =>  Lab
+Optimizacion DockerFile => DO288 => Review
+
+
+VODAFONE
+Telefóno: 607 123 000
+Línea: 91 851 02 24
+
+
+#####################
+## OBJETIVOS EXAMEN EX-280
+## 
+## -> Control Acceso
+##     Tema 10 - Ex.2 + Lab
+##     Review - Lab, Ej.1
+
+## -> Secrets
+##    Review - Lab 1, Punto 1 y 2
+## -> SA
+##   
+## -> TLS.. Tema 12 + Lab 2
+##
+## -> Scale Application => Tema 13
+##
+#####################
+
+
+
+#####################
+## OBJETIVOS EXAMEN EX-288
+## 
+## -> Optimizacion Dockerfile
+##    DO285 => Tema 5 => Ex1 + Lab
+##    DO288 => Tema 2 => Lab
+##    DO288 => Tema 2 => Review
+##
+## -> Crear Image Stream
+##    Ejercicio 3 => Tema 3
+## 
+## -> ConfigMaps
+##  Tema 2 => Ej2 + Lab
+##	Review => Ej2
+##
+## -> S2I
+##  Tema 6  
+##  Tema 5 ... customizar S2I scripts
+##
+## -> Hooks 
+##  Tema 4, Ejercicio 3
+##  Tema 7, Ejercicio 3
+##
+## -> Probes
+##  Tema 7, Ej.1 + Ej.3 
+##
+## -> Templates
+##   DO285, Tema 7, Ej1+2+ Lab... ejercicio parques naturales, estadios futbol (MBL)
+##   DO288, Tema 6, Ej2 + Review, Lab 2
+#####################
+
+
+
+
+------------------
+TEMA -1- 
+------------------
+
+
+#########################
+#  -> PROCEDIMIENTOS Y CONCEPTOS
+#########################
+
+#########################
+#  -> DESCRIPCIÓN PROCEDIMIENTOS
+#########################
+
+------------------
+TEMA -2- 
+------------------
+
+
+#########################
+#  -> PROCEDIMIENTOS Y CONCEPTOS
+#########################
+
+#########################
+#  -> DESCRIPCIÓN PROCEDIMIENTOS
+#########################

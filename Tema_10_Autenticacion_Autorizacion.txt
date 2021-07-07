@@ -1,0 +1,304 @@
+=========================
+TEMA 10 - CONFIGURING AUTHENTICATION AND AUTHORIZATION
+=========================
+
+----------
+GUIDED 1 - Configuring Identity Providers
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab auth-provider start
+
+1.- Create HPasswd file 
+--------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+[student@workstation ~]$ htpasswd -c -B -b ~/DO280/labs/auth-provider/htpasswd admin redhat
+[student@workstation ~]$ htpasswd -b ~/DO280/labs/auth-provider/htpasswd developer developer
+[student@workstation ~]$ cat ~/DO280/labs/auth-provider/htpasswd
+
+2.- Log to the Cluster + Create Secret + Add Policy
+--------
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc create secret generic localusers --from-file htpasswd=/home/student/DO280/labs/auth-provider/htpasswd -n openshift-config
+[student@workstation ~]$ oc adm policy add-cluster-role-to-user cluster-admin admin
+
+3.- Update OAUth Operator Config
+--------
+[student@workstation ~]$ oc get oauth cluster -o yaml > ~/DO280/labs/auth-provider/oauth.yaml
+[student@workstation ~]$ vim ~/DO280/labs/auth-provider/oauth.yaml 
+
+apiVersion: config.openshift.io/v1
+kind: OAuth
+...output omitted...
+spec:
+ identityProviders:
+ - htpasswd:
+      fileData:
+   name: localusers
+   mappingMethod: claim
+   name: myusers
+   type: HTPasswd
+
+[student@workstation ~]$ oc replace -f ~/DO280/labs/auth-provider/oauth.yaml
+
+
+4.- Verify Identity
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc get nodes
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc get nodes
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc get users
+[student@workstation ~]$ oc get identity
+
+5.- Add New User
+--------
+[student@workstation ~]$ oc extract secret/localusers -n openshift-config --to ~/DO280/labs/auth-provider/ --confirm
+[student@workstation ~]$ htpasswd -b ~/DO280/labs/auth-provider/htpasswd manager redhat
+[student@workstation ~]$ cat ~/DO280/labs/auth-provider/htpasswd
+[student@workstation ~]$ oc set data secret/localusers --from-file htpasswd=/home/student/DO280/labs/auth-provider/htpasswd -n openshift-config
+[student@workstation ~]$ oc login -u manager -p redhat
+
+6.- Verify Permissions
+--------
+[student@workstation ~]$ oc new-project auth-provider
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc delete project auth-provider
+
+7.- Update usuario Manager
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc extract secret/localusers -n openshift-config --to ~/DO280/labs/auth-provider/ --confirm
+[student@workstation ~]$ MANAGER_PASSWD="$(openssl rand -hex 15)"
+[student@workstation ~]$ htpasswd -b ~/DO280/labs/auth-provider/htpasswd manager ${MANAGER_PASSWD}
+[student@workstation ~]$ oc set data secret/localusers --from-file htpasswd=/home/student/DO280/labs/auth-provider/htpasswd -n openshift-config
+[student@workstation ~]$ oc login -u manager -p ${MANAGER_PASSWD}
+
+8.- Delete User Manager
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc extract secret/localusers -n openshift-config --to ~/DO280/labs/auth-provider/ --confirm
+[student@workstation ~]$ htpasswd -D ~/DO280/labs/auth-provider/htpasswd manager
+[student@workstation ~]$ oc set data secret/localusers --from-file htpasswd=/home/student/DO280/labs/auth-provider/htpasswd -n openshift-config
+[student@workstation ~]$ oc delete identity "myusers:manager"
+[student@workstation ~]$ oc delete user manager
+[student@workstation ~]$ oc login -u manager -p ${MANAGER_PASSWD}
+[student@workstation ~]$ oc get users
+[student@workstation ~]$ oc get identity
+[student@workstation ~]$ oc extract secret/localusers -n openshift-config --to -
+
+9.- Delete Identity Provider
+--------
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD}
+[student@workstation ~]$ oc edit oauth
+
+...output omitted...
+spec: {}
+
+oauth.config.openshift.io/cluster edited
+
+[student@workstation ~]$ oc delete secret localusers -n openshift-config
+[student@workstation ~]$ oc delete user --all
+[student@workstation ~]$ oc delete identity --all
+
+10.- Finish
+--------
+[student@workstation ~]$ lab auth-provider finish
+
+----------
+GUIDED 2 - Defining and Applying Permissions using RBAC
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab auth-rbac start
+
+1.- Get List of Users with Role "self-provisioner"
+--------
+[student@workstation ~]$ oc login -u admin -p redhat https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc get clusterrolebinding -o wide | grep -E 'NAME|self-provisioner'
+
+2.- Add Policy to Role "self-provisioner"
+--------
+[student@workstation ~]$ oc describe clusterrolebindings self-provisioners
+[student@workstation ~]$ oc adm policy remove-cluster-role-from-group self-provisioner system:authenticated:oauth
+[student@workstation ~]$ oc describe clusterrolebindings self-provisioners
+[student@workstation ~]$ oc get clusterrolebinding -o wide | grep -E 'NAME|self-provisioner'
+[student@workstation ~]$ oc login -u leader -p redhat
+
+3.- Create Project + Assign role "admin" to user "leader"
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc new-project auth-rbac
+[student@workstation ~]$ oc policy add-role-to-user admin leader
+
+
+4.- Create Groups (dev-group, qa-group) + Assign Users (developer, qa-engineer)
+--------
+[student@workstation ~]$ oc adm groups new dev-group
+[student@workstation ~]$ oc adm groups add-users dev-group developer
+[student@workstation ~]$ oc adm groups new qa-group
+[student@workstation ~]$ oc adm groups add-users qa-group qa-engineer
+[student@workstation ~]$ oc get groups
+
+5.- Add policies to Roles
+--------
+[student@workstation ~]$ oc login -u leader -p redhat
+[student@workstation ~]$ oc policy add-role-to-group edit dev-group
+[student@workstation ~]$ oc policy add-role-to-group view qa-group
+[student@workstation ~]$ oc get rolebindings -o wide
+
+6.- Deploy App + Add policy
+--------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc new-app --name httpd httpd:2.4
+[student@workstation ~]$ oc policy add-role-to-user edit qa-engineer
+
+7.- Verify Permissions
+--------
+[student@workstation ~]$ oc login -u qa-engineer -p redhat
+[student@workstation ~]$ oc scale deployment httpd --replicas 3
+
+8.- Add Policy to "group" "self-provisioner"
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc adm policy add-cluster-role-to-group --rolebinding-name self-provisioners self-provisioner system:authenticated:oauth
+
+
+9.- Finish
+--------
+[student@workstation ~]$ lab auth-rbac finish
+
+----------
+LAB - Configuring Authentication and Authorization
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab auth-review start
+
+1.- Remove User + Update Passwords
+--------
+
+1.1.-  Working Environment
+.......
+[student@workstation ~]$ cat ~/DO280/labs/auth-review/tmp_users 
+[student@workstation ~]$ WORKFILE=~/DO280/labs/auth-review/tmp_users 
+[student@workstation ~]$ cat $WORKFILE 
+
+1.2.-  Verify Users tester and leader
+.......
+[student@workstation ~]$ htpasswd -D  $WORKFILE analyst
+[student@workstation ~]$ htpasswd -v  $WORKFILE tester 
+Enter Password: L@bR3v!ew
+[student@workstation ~]$ htpasswd -D  $WORKFILE tester  
+[student@workstation ~]$ htpasswd -B -b $WORKFILE tester 'L@bR3v!ew'
+
+[student@workstation ~]$ htpasswd -v  $WORKFILE leader
+Enter Password: L@bR3v!
+[student@workstation ~]$ htpasswd -D  $WORKFILE leader  
+[student@workstation ~]$ htpasswd -B -b $WORKFILE leader 'L@bR3v!ew'
+
+1.3.-  Add new users admin + developer
+.......
+[student@workstation ~]$ htpasswd -B -b $WORKFILE admin 'L@bR3v!ew'
+[student@workstation ~]$ htpasswd -B -b $WORKFILE developer 'L@bR3v!ew'
+
+2.- Configure HPasswd Identity Provider
+--------
+2.1.- Create Secret
+..........
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc create secret generic chap10-secret --from-file htpasswd=${WORKFILE} -n openshift-config
+[student@workstation ~]$ oc get secret -n openshift-config | grep chap
+[student@workstation ~]$ oc describe secret chap10-secret -n openshift-config
+
+2.2.- Load OAUth Config
+..........
+[student@workstation ~]$ WORKDIR=~/DO280/labs/auth-review
+[student@workstation ~]$ oc get oauth cluster -o yaml >   ${WORKDIR}/oauth_usuarios.yaml
+[student@workstation ~]$ cp ${WORKDIR}/oauth_usuarios.yaml  ${WORKDIR}/oauth_usuarios_bk.yaml
+[student@workstation ~]$ vim ${WORKDIR}/oauth_usuarios.yaml
+
+apiVersion: config.openshift.io/v1
+kind: OAuth
+...output omitted...
+spec:
+ identityProviders:
+ - htpasswd:
+      fileData:
+         name: chap10-secret
+   mappingMethod: claim
+   name: chap10
+   type: HTPasswd
+
+[student@workstation ~]$ cat ${WORKDIR}/oauth_usuarios.yaml
+[student@workstation ~]$ oc apply -f ${WORKDIR}/oauth_usuarios.yaml
+[student@workstation ~]$ oc get pods -n openshift-authentication
+
+2.3.- Verify Users
+..........
+[student@workstation ~]$ oc login -u tester -p 'L@bR3v!ew'
+[student@workstation ~]$ oc login -u leader -p 'L@bR3v!ew'
+[student@workstation ~]$ oc login -u developer -p 'L@bR3v!ew'
+[student@workstation ~]$ oc login -u admin -p 'L@bR3v!ew'
+
+
+3.- Make admin user Cluster Administrator
+--------
+3.1. Assign Cluster Administration Role
+.......
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc adm policy add-cluster-role-to-user cluster-admin admin
+
+3.2. Test admin
+.......
+[student@workstation ~]$ oc login -u admin -p 'L@bR3v!ew'
+[student@workstation ~]$ oc get nodes
+
+3.3. Test developer
+.......
+[student@workstation ~]$ oc login -u developer -p 'L@bR3v!ew'
+[student@workstation ~]$ oc get nodes
+
+4.- As Admin... remove ability to create projects
+--------
+[student@workstation ~]$ oc login -u admin -p 'L@bR3v!ew'
+[student@workstation ~]$ oc adm policy remove-cluster-role-from-group self-provisioner system:authenticated:oauth
+
+5.- Create a group named managers + add the leader.
+--------
+5.1.- Create a group named managers + add the leader
+..........
+[student@workstation ~]$ oc adm groups new managers
+[student@workstation ~]$ oc adm groups add-users managers leader
+
+5.2.- Grant project creation privileges to the managers group
+..........
+[student@workstation ~]$ oc adm policy add-cluster-role-to-group self-provisioner managers
+
+5.3.- As the leader user, create the auth-review project
+..........
+[student@workstation ~]$ oc login -u leader -p 'L@bR3v!ew'
+[student@workstation ~]$ oc new-project auth-review
+
+6.- Create Group 'developers' + add  'developer' user, set edit permissions to project 'auth-review'""
+--------
+[student@workstation ~]$ oc login -u admin -p 'L@bR3v!ew'
+[student@workstation ~]$ oc adm groups new developers
+[student@workstation ~]$ oc adm groups add-users developers developer
+[student@workstation ~]$ oc policy add-role-to-group edit developers
+
+7.- Create Group 'qa' + add  'tester' user, set view permissions to group 'qa'
+--------
+[student@workstation ~]$ oc adm groups new qa
+[student@workstation ~]$ oc adm groups add-users qa tester
+[student@workstation ~]$ oc policy add-role-to-group view qa
+
+8.- Finish
+--------
+[student@workstation ~]$ lab auth-review grade
+[student@workstation ~]$ lab auth-review finish

@@ -1,0 +1,35 @@
+EJERCICIO: MODIFICACIÓN DEL TIEMPO DE DURACIÓN DEL TOKEN DE AUTENTICACIÓN		Last Update: 30-Septiembre-2020
+==========================================================================
+
+Se debe modificar la duración del token de autenticación de las 24 por defecto a 8 horas.
+
+La configuración de este parámetro, la podemos encontrar en la documentación oficial del
+producto que proporciona Red Hat.
+
+NOTA: Este ejercicio es un ejemplo de la diferencia entre oc apply y oc replace.
+
+
+-----------------------
+Paso 1.- Extraer Configuracion OAuth
+-----------------------
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ mkdir ~/DO280/labs/token
+[student@workstation ~]$ oc get oauth cluster -o yaml > ~/DO280/labs/token/oauth_token.yaml
+[student@workstation ~]$ cp ~/DO280/labs/token/oauth_token.yaml ~/DO280/labs/token/oauth_token_bk.yaml
+
+
+-----------------------
+Paso 2.- Editar Spec OAuth
+-----------------------
+[student@workstation ~]$ vim ~/DO280/labs/token/oauth_token.yaml
+
+spec:
+  tokenConfig:
+    accessTokenMaxAgeSeconds: 28800
+	
+-----------------------
+Paso 3.- Cargar la configuración OAuth
+-----------------------
+[student@workstation ~]$ 12
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc get pods -n openshift-authentication

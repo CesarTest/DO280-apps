@@ -1,0 +1,91 @@
+EJERCICIO TETRIS   			Last Update:  7-Mayo-2021
+================
+
+Se va a desplegar la aplicación Tetris, un juego desarrollado en los 80 por el ruso Alekséi Pázhitnov.
+
+1.- Se hará un fork de una versión del juego cuyo código fuente está en:
+
+	https://github.com/KonradSchieban/tetris
+
+   en el usuario Git del alumno.
+
+2.- Usando el usuario de OCP "developer", se desplegará en el clúster OpenShift la aplicación usando el código fuente del Git del usuario en el proyecto "mi-tetris" donde todos los recursos tendrán el nombre "tetris" y a etiqueta "juego" con valor "tetris".
+
+   ¡OJO! Se utilizará el código fuente y no el Dockerfile que existe en el repositorio Git.
+  Para ello hay que asegurarse de que el recurso BC tiene en el atributo "stragy", el valor "source".
+
+3.- Se creará la ruta llamada "juegatetris" en la URL "playtetris.<dominio-ocp>" y se comprobará que el Tetris funciona.
+
+4.- Eliminar el proyecto "mi-tetris"·
+
+
+SOLUCIÓN
+========
+
+1.- Desde un navegador se accede a GitHub con las credenciales correspondientes y accede a la URL:
+
+	https://github.com/KonradSchieban/tetris
+
+   y pulso en "Fork".
+
+2.- Despliego la app:
+
+   Hago login en el clúster:
+
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+	oc new-project mi-tetris
+
+	oc new-app --as-deployment-config https://github.com/<USUARIO-GIT>/tetris --name=tetris -l juego=tetris --strategy=source -> falla, no encuentra la imagen a partir de la cual construir. 
+
+  Mirando el código fuente, veo que necesita una imagen de construcción de Apache. 
+
+	oc new-app --as-deployment-config httpd~https://github.com/<USUARIO-GIT>/tetris --name=tetris -l juego=tetris --strategy=source -> ahora si
+
+   vemos la construcción:
+
+	oc logs -f build/tetris-1
+
+   veo que se levanta el pod:
+
+	oc get pod
+
+3.- Creo la ruta:
+
+ miro cual es el dominio de OpenShift, primero buscando los pods del router (que están en el proyecto openshift-ingress) siendo usuario cluster-admin: 
+
+	oc login -u admin -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+	oc get pod -n openshift-ingress   -> miro como se llama uno de los pods <nombre_pod>
+
+  veo su descripción y busco el valor de la variable ROUTER_CANONICAL_HOSTNAME, ese será el <dominio-ocp>:
+
+	oc describe pod <nombre_pod> -n openshift-ingress  	
+
+  vuelvo al usuario developer: 
+
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+ usando ese dominio, hago:
+
+	oc expose svc tetris --name=juegatetris --hostname=playtetris.<dominio-ocp>	
+
+ accedo con un navegador a la URL: playtetris.<dominio-ocp> y veo que funciona.	
+
+NOTA: Una forma rápida de ver cual es el dominio de OCP es crear una ruta por defecto: 
+	
+	oc expose svc tetris,
+
+  ver cual es la URL que ha generado de forma automática: 
+
+	oc get routes    -> veo cual es el dominio quitando <nombre-ruta>-<nombre-proyecto> a la URL.
+  
+   y entonces borrarla: 
+
+	oc delete route tetris 
+
+   y crear la ruta que queramos ya sabiendo el dominio.
+
+4.- Elimino el proyecto creado:
+
+	oc delete project mi-tetris

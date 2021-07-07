@@ -1,0 +1,136 @@
+EJERCICIO TIEMPO REACT				Last Update: 25-Sept-2020
+=======================
+
+Dado el código fuente que está en:
+
+	https://github.com/bmorelli25/React-Weather-App
+
+1.- Clonarlo en el GitHub del usuario.
+
+2.- Con el usuario developer que tengamos, crear un proyecto llamado "<usuario>-tiemporeact" donde se desplegará dicha app teniendo en cuenta que la versión de NodeJS es la 10. El nombre de todos los recursos debe ser "tiempoatm" y todos los recursos deben tener una etiqueta llamada "ejercicio" con valor "tiemporeact".
+
+3.- Crear una ruta para acceder a la app y comprobar que funciona
+
+
+SOLUCIÓN
+========
+0.- Hacer login en el clúster de OpenShift.
+
+1.- Clonar en mi cuenta de Git el código fuente:
+
+	Cargar en un navegador la web y, habiendo hecho login en GitHub con nuestro usuario, arriba a la derecha, darle a fork.
+
+2.- Desplegar la app:
+
+	oc new-project <usuario>-tiemporeact 
+
+	oc get is -n openshift | grep -i nodejs
+
+	oc describe is nodejs -n openshift 	-> veo que está el 10
+
+  	oc new-app nodejs:10~https://github.com/<usuario-GIT>/React-Weather-App --name=tiempoatm -l ejercicio=tiemporeact
+
+	oc logs -f build/tiempoatm-1
+
+3.- Creo la ruta:
+
+	oc expose svc tiempoatm
+
+   Accedo con un navegador a la ruta -> Opssss, no funciona!!! ¿Porqué?	
+
+TROUBLESHOOTING
+----------------
+
+1.- Veo que la ruta esté bien, que el subdominio de OpenShift es correcto
+
+	oc get route tiempoatm -o=custom-columns=RUTA:.spec.host --no-headers		-> ESTÁ BIEN
+
+2.- Veo si el servicio tiene endpoints:
+
+	oc get endpoints tiempoatm						-> SI QUE TIENE ENDPOINTS
+
+3.- Veo que pod es el que está de endpoint con esa IP
+
+	oc get pod -o wide
+
+4.- Veo los logs de ese pod:
+
+	oc logs -f <nombre-pod>		-> Veo que dice "Express Server is up on port 3000"
+					¿Comooooooo? ¿Qué está dando servicio en el puerto 3000?
+
+5.- Veo el servicio a que puerto está apuntando:
+
+	oc describe svc tiempoatm	-> Busco el targetport  -> Pone 8080/TCP
+
+  resulta que el puerto 8080 del servicio apunta al puerto 8080 del contenedor del pod!!!!! Y ahí no está
+
+
+SOLUCIÓN 1: 
+-----------
+
+6.- Cambio el puerto al que apunta el servicio:
+
+	oc edit svc tiempoatm		-> Busco targetPort:8080 y lo cambio por el 3000
+
+7.- Accedo con un navegador a la ruta -> ¡¡¡Si!!! ¡¡¡Ya funciona!!!
+
+8.- Borro el proyecto:
+
+	oc delete project <usuario>-tiemporeact 
+FIN
+
+SOLUCIÓN 2: 
+-----------
+
+6.- En el código fuente, en el fichero "server.js" veo que usa una variable de entorno PORT que si no existe, pone el valor a 3000. Creo una variable de entorno en el DC que se llame así:
+
+	oc set env dc/tiempoatm PORT=8080
+
+  se redespliega el pod y veo los logs para ver donde ha levantado la app:
+
+	oc logs -f <nombre_pod>		-> Veo que dice "Express Server is up on port 8080"
+
+ ahora el proceso del contenedor del pod estará en el puerto 8080 que es el target port del servicio.
+
+7.- Accedo con un navegador a la ruta -> ¡¡¡Si!!! ¡¡¡Ya funciona!!!
+
+8.- Borro el proyecto:
+
+	oc delete project <usuario>-tiemporeact 
+FIN
+
+SOLUCIÓN 3:
+-----------
+
+6.- Modifico el código fuente para que la app levante en el puerto 8080 y no en el 3000. Clono en local el código fuente:
+
+	cd Apps;
+	git clone https://github.com/<usuario-GIT>/React-Weather-App
+	cd React-Weather-App
+
+  edito el fichero "server.js" y cambio el 3000 por el 8080
+
+7.- Subo los cambios a GitHub:
+
+	git add .
+	git commit -m "Cambio puerto"
+	git push
+
+8.- Vuelvo a contruir la app:
+
+	oc start-build tiempoatm
+
+ y espero a que se haya terminado de construir y desplegado el nuevo pod de la app
+
+ Veo el log del pod:
+
+	oc logs -f <pod>    ->  Veo "Express Server is up on port 8080"  -> ¡Bien!
+
+9.- Accedo con un navegador a la ruta -> ¡¡¡Si!!! ¡¡¡Ya funciona!!!
+
+10.- Borro el proyecto:
+
+	oc delete project <usuario>-tiemporeact 
+FIN
+
+

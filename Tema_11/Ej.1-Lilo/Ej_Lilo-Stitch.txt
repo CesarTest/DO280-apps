@@ -1,0 +1,41 @@
+EJERCICIO LILO&STITCH						Last Update: 4-Octubre-20
+======================
+
+Se va a desplegar la aplicación "Trailer Lilo&Stitch" que está en el repo GIT:
+
+	https://github.com/arielgall/Lilo-and-Stitch-trailer
+
+1.- Usando el usuario de OCP "developer", se desplegará en el clúster OpenShift la app desde el código fuente dato en el proyecto "lilo-stitch" donde todos los recursos tendrán el nombre "trailer" y a etiqueta "trailer" con valor "lilo".
+
+2.- Se creará la ruta llamada "trailer-lilo" en la URL "trailer.<dominio-ocp>". Conprobar que la app funciona.
+
+3.- Eliminar el proyecto "lilo-stitch"
+
+=============
+
+----------
+PASO 1 - CREAR PROYECTO 
+----------
+
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc new-project lilo-stich --description="Trailer Lilo"
+[student@workstation ~]$ oc get is -n openshift
+[student@workstation ~]$ oc new-app --name=trailer -l trailer=lilo --as-deployment-config httpd~https://github.com/arielgall/Lilo-and-Stitch-trailer.git
+
+----------
+PASO 2 - CREAR LA RUTA 
+----------
+[student@workstation ~]$ oc expose service trailer --name=trailer --hostname=http://trailer.${RHT_OCP4_WILDCARD_DOMAIN}
+
+----------
+PASO 3 - BORRAR EL PROYECTO 
+---------
+[student@workstation ~]$ oc get all --show-labels
+[student@workstation ~]$ oc get all -l app=trailer
+[student@workstation ~]$ oc delete all -l app=trailer 
+
+.... Ojo con otros recursos del proyecto, que no salen en "get all"
+
+[student@workstation ~]$ oc delete project lilo-stich
+
+

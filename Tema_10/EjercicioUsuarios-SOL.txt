@@ -1,0 +1,121 @@
+PARTE EXTRA EJERCICIO P3-1				Last Update: 1-octubre-2020
+===========================
+
+1.- Crear un fichero de htpasswd en /tmp/usuarios con los usuarios:
+
+	USUARIO		PASSWORD
+       -----------------------------
+	burr		sutter
+	edson		yanaga
+	kamesh 		sampath
+	alex		soto
+
+NOTA: Estos usuarios son las personas que se encargan del programa Developers de Red Hat (¡¡¡los gurus!!!). Se puede ver en https://developers.redhat.com/about
+
+2.- El secret del auth provider se debe llamar "mihtpasswd".
+
+3.- Configurar este fichero de htpasswd como auth provider.
+	
+4.- Verificar que puedo hacer login al cluster con los usuarios.
+
+5.- Crear los grupos de usuarios llamados "javadevs" y "otrodevs" donde Burr, Edson y Alex pertenecen al primer grupo y Kamesh al segundo.
+    Al grupo de "javadevs" le doy permisos para ver recursos del clúster y al grupo "otrodevs" permisos totales en el clúster.
+
+6.-Para volver a tener el entorno como debe estar para el resto de ejercicios, ejecutar:
+
+	 lab auth-provider start
+	 lab auth-provider finish
+	 lab authorization-rbac start
+	 lab authorization-rbac finish
+ 
+  así se elimina todo lo realizado en este ejercicio extra.
+
+SOLUCIÓN
+=========
+
+1.- Creo el nuevo fichero con el primer usuario y luego voy añadiendo el resto:
+
+	htpasswd -c -B -b /tmp/usuarios burr sutter
+	htpasswd -b /tmp/usuarios edson yanaga
+	htpasswd -b /tmp/usuarios kamesh sampath
+	htpasswd -b /tmp/usuarios alex soto
+
+ verifico que están todos:
+
+	cat /tmp/usuarios
+
+2.- Creo el secret del auth provider con el nombre de "mihtpasswd":
+
+ hago login con el usuario "kubeadmin":
+
+	oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} ${RHT_OCP4_MASTER_API}
+
+ creo el secret:
+
+	oc create secret generic mihtpasswd --from-file htpasswd=/tmp/usuarios -n openshift-config
+
+3.- Obtengo el custom resource "OAuth":
+
+	oc get oauth cluster -o yaml > oauth.yaml
+
+  edito el recurso:
+
+	vim oauth.yaml y añado/modifico en spec:
+----------------------------------------
+spec:
+  identityProviders:
+  - htpasswd:
+      fileData:
+        name: mihtpasswd
+    mappingMethod: claim
+    name: misusuarios
+    type: HTPasswd
+----------------------------------------		
+ 
+ sustituyo el recurso:
+
+	oc replace -f oauth.yaml
+
+4.- Verifico que puedo hacer login con los usuarios:
+
+	oc login -u burr -p sutter ${RHT_OCP4_MASTER_API}
+
+5.- Hago login con el usuario kubeadmin para crear los grupos:
+
+	oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} ${RHT_OCP4_MASTER_API}
+
+ creo los grupos:
+
+	oc adm groups new javadevs burr edson alex
+	oc adm groups new otrodevs kamesh
+
+ verifico:
+	oc get groups
+
+ doy permisos de "cluster-status" al grupo "javadevs":
+
+	oc adm policy add-cluster-role-to-group cluster-status javadevs
+
+ doy permisos de "cluster-admin" al grupo "otrodevs":
+
+	oc adm policy add-cluster-role-to-group cluster-admin otrodevs
+ 
+ verifico:
+
+	oc get clusterrolebindings -o wide | grep -v openshift- | grep -v system
+
+
+6.- Ejecuto los scripts para que borre todo lo que hice en este ejercicio extra:
+
+	lab auth-provider start
+	lab auth-provider finish
+	lab authorization-rbac start
+
+    NOTA: puede que falle la creación del secret local-users, no pasa nada, ya está creado.
+
+	lab authorization-rbac finish
+
+  y borro los clusterrolebindigs
+
+	oc delete clusterrolebindings cluster-admin-1 cluster-status
+	

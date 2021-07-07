@@ -1,0 +1,266 @@
+=========================
+TEMA 15 - MANAGING CLUSTER WITH THE WEB CONSOLE
+=========================
+
+---- Si no existe Secret Local User -----
+lab auth-provider start;
+lab auth-provider finish;
+
+lab auth-rbac start;
+lab auth-rbac finish;
+---- Si no existe Secret Local User -----
+
+
+----------
+GUIDED 1 - Performing Cluster Administration
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab console-admin start
+
+1.- 
+--------
+[student@workstation ~]$ oc login -u admin -p redhat  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc whoami --show-console
+Firefox --->  https://console-openshiftconsole.apps.ocp4.example.com
+
+6.-
+-------
+.... 6.1.- Create Project 
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> Home -> Projects -> Create Project
+.....
+Name: console-apps
+Display Name: Console chapter applications
+Description: Example project
+.....
+
+
+.... 6.2.- Create Quota
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> Administration -> Resources Quotas
+.....
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+ name: quota
+ namespace: console-apps
+spec:
+ hard:
+ pods: '10'
+ requests.cpu: '2'
+ requests.memory: 8Gi
+ limits.cpu: '4'
+ limits.memory: 12Gi
+....
+
+.... 6.3.- Create Range Limits
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> Administration -> Range Limits -> Create Limit Range
+.....
+apiVersion: v1
+kind: LimitRange
+metadata:
+ name: limit-range
+ namespace: console-apps
+spec:
+ limits:
+ - default:
+    cpu: 500m
+    memory: 5Gi
+   defaultRequest:
+    cpu: 10m
+    memory: 100Mi
+    type: Container
+......
+
+.... 6.4.- Create User Group
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> User Management -> Groups -> Create Group
+
+....
+apiVersion: user.openshift.io/v1
+kind: Group
+metadata:
+ name: project-team
+users:
+ - developer
+ - tester
+....
+
+.... 6.5.- Roles
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> User Management -> Role Bindings -> Create Binding
+......
+Binding Type: Namespace Role Binding (RoleBinding)
+Name        : team
+Namespace   : console-apps
+Role Name   : edit
+Subject     : Group
+Subject Name: project-team
+......
+
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> User Management -> Role Bindings -> Create Binding
+......
+Binding Type: Namespace Role Binding (RoleBinding)
+Name        : leader
+Namespace   : console-apps
+Role Name   : admin
+Subject     : User
+Subject Name: leader
+......
+
+
+7.- Finish
+--------
+[student@workstation ~]$ lab console-admin finish
+
+----------
+GUIDED 2 - Managing Workloads and Operators
+----------
+
+0.- Start
+--------
+[student@workstation ~]$  lab console-workloads start
+
+1.- Login
+--------
+[student@workstation ~]$ oc login -u admin -p redhat https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc whoami --show-console
+Firefox --->  https://console-openshiftconsole.apps.ocp4.example.com
+
+7.- Create Application Deployment from YAML
+--------
+[student@workstation ~]$ cat ~/DO280/labs/console-workloads/deployment.yaml
+[student@workstation ~]$ cat ~/DO280/labs/console-workloads/service.yaml
+
+9.- Finish
+---------
+[student@workstation ~]$ lab console-workloads finish
+
+----------
+GUIDED 3 - Examining Cluster Metrics
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab console-metrics start
+
+[student@workstation ~]$ oc login -u admin -p redhat  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc whoami --show-console
+
+
+4.- Load Metrics
+--------
+[student@workstation ~]$ ~/DO280/labs/console-metrics/load.sh
+
+.......Prometheus Query
+avg(container_memory_working_set_bytes{namespace='console-apps'}) BY (pod)
+
+
+7.- Finish
+--------
+[student@workstation ~]$ lab console-metrics finish
+
+
+----------
+LAB
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab console-review start
+
+1.- Add "tester" user to "localhost" secret
+--------
+[student@workstation ~]$ oc login -u admin -p redhat  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc whoami --show-console
+Firefox --->  https://console-openshiftconsole.apps.ocp4.example.com -> Workloads -> Secret -> Edit Secret
+
+[student@workstation ~]$ htpasswd -n -b dba redhat
+[student@workstation ~]$ htpasswd -n -b tester redhat
+
+2.- Create new-app  group that contains "developer" and dba users
+--------
+Firefox --->  https://console-openshiftconsole.apps.ocp4.example.com -> Manage Users -> Groups -> Create Group
+
+....
+apiVersion: user.openshift.io/v1
+kind: Group
+metadata:
+ name: app-team
+users:
+ - developer
+ - dba
+....
+
+
+4.- Create console-review project, view rolebinding for tester, edit to app-team group
+--------
+___ 4.1.- Create Project
+Firefox --->  https://console-openshiftconsole.apps.ocp4.example.com -> Overview -> Projects -> Create Project
+.....
+Name: console-review
+Display Name: Console review lab
+Description: Example application
+.....
+
+
+___ 4.2.- Rolebindings
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> User Management -> Role Bindings -> Create Binding
+......
+Binding Type: Namespace Role Binding (RoleBinding)
+Name        : tester
+Namespace   : console-review
+Role Name   : view
+Subject     : User
+Subject Name: tester
+......
+
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> User Management -> Role Bindings -> Create Binding
+......
+Binding Type: Namespace Role Binding (RoleBinding)
+Name        : app-team
+Namespace   : console-review
+Role Name   : edit
+Subject     : Group
+Subject Name: app-team
+......
+
+___ 4.3.- Resource Quotas
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> Administration -> Resources Quotas
+.....
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+ name: quota
+ namespace: console-apps
+spec:
+ hard:
+ pods: '4'
+ limits.memory: 12Gi
+....
+
+5.- Install Operator
+--------
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> Operator -> Operators Hub 
+.....CoachDb -> Install
+
+6.- Allow DBA user to see openshift operators
+--------
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> User Management -> Role Bindings -> Create Binding
+......
+Binding Type: Namespace Role Binding (RoleBinding)
+Name        : operator
+Namespace   : openshift-operator
+Role Name   : edit
+Subject     : User
+Subject Name: dba
+......
+
+
+7.- Deploy CoachDB as dba user
+--------
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> logout
+Firefox -> https://console-openshiftconsole.apps.ocp4.example.com -> localuser -> dba / redhat
+
+
+10.- Finish
+--------
+[student@workstation ~]$ lab console-review grade

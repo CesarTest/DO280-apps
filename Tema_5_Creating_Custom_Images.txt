@@ -1,0 +1,95 @@
+=========================
+TEMA 5 - CREATING CONTAINER IMAGES
+=========================
+
+----------
+GUIDED 1 - Creating a Basic Apache Container Image
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab dockerfile-create start
+
+1.- Create Docker File
+--------
+[student@workstation ~]$ vim /home/student/DO180/labs/dockerfile-create/Dockerfile
+FROM ubi7/ubi:7.7
+MAINTAINER Cesar Delgado <andepiel45@hotmail.com>
+LABEL description="A custom Apache container based on UBI 7"
+RUN yum install -y httpd && \
+    yum clean all
+RUN echo "Hello from Dockerfile" > /var/www/html/index.html
+EXPOSE 80
+CMD ["httpd", "-D", "FOREGROUND"]
+
+2.- Build Image
+--------
+[student@workstation ~]$ cd /home/student/DO180/labs/dockerfile-create
+[student@workstation dockerfile-create]$ sudo podman build --layers=false -t do180/apache .
+[student@workstation dockerfile-create]$ sudo podman images
+
+3.- Container 
+--------
+[student@workstation dockerfile-create]$ sudo podman run --name lab-apache -d -p 10080:80 do180/apache
+[student@workstation dockerfile-create]$ sudo podman ps
+[student@workstation dockerfile-create]$ curl 127.0.0.1:10080
+
+4.- Finish 
+--------
+[student@workstation ~]$ lab dockerfile-create finish
+
+----------
+LAB - Creating Custom Container Image
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab dockerfile-review start
+
+1.- Create Dockerfile
+--------
+[student@workstation ~]$ cd /home/student/DO180/labs/dockerfile-review/
+[student@workstation ~]$ vi DockerFile
+
+FROM ubi7/ubi:7.7
+
+MAINTAINER Cesar Delgado <andepiel45@hotmail.com>
+
+ENV PORT 8080
+
+RUN yum install -y httpd && \
+ yum clean all
+
+RUN sed -ri -e "/^Listen 80/c\Listen ${PORT}" /etc/httpd/conf/httpd.conf && \
+ chown -R apache:apache /etc/httpd/logs/ && \
+ chown -R apache:apache /run/httpd/
+
+USER apache
+
+# Expose the custom port that you provided in the ENV var
+EXPOSE ${PORT}
+
+# Copy all files under src/ folder to Apache DocumentRoot (/var/www/html)
+COPY ./src/ /var/www/html/
+
+# Start Apache in the foreground
+CMD ["httpd", "-D", "FOREGROUND"]
+
+2.- Create Container Image
+--------
+[student@workstation dockerfile-review]$ sudo podman build --layers=false -t do180/custom-apache .
+[student@workstation dockerfile-review]$ sudo podman images
+
+3.- Run Container
+--------
+[student@workstation dockerfile-review]$ sudo podman run -d  --name dockerfile -p 20080:8080 do180/custom-apache
+[student@workstation dockerfile-review]$ sudo podman ps
+
+4.- Verify
+--------
+[student@workstation dockerfile-review]$ curl 127.0.0.1:20080
+
+5.- Finish
+--------
+[student@workstation ~]$ lab dockerfile-review grade
+[student@workstation ~]$ lab dockerfile-review finish

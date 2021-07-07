@@ -1,0 +1,28 @@
+FROM ubi7/ubi:7.7
+
+MAINTAINER Cesar Delgado <andepiel45@hotmail.com>
+
+LABEL format=oci
+
+USER root
+
+ENV PORT 8080
+
+RUN yum install -y httpd && \
+    yum clean all
+
+RUN sed -ri -e "/^Listen 80/c\Listen ${PORT}" /etc/httpd/conf/httpd.conf && \
+ sed -ri -e "/User apache\User 1001" /etc/httpd/conf/httpd.conf && \  
+ sed -ri -e "/Group apache\Group 0" /etc/httpd/conf/httpd.conf && \   
+ chown -R 1001:0 /etc/httpd/logs/ && \
+ chown -R 1001:0 /run/httpd/ && 
+
+ADD ./paint.tar /var/www/html
+
+USER apache
+
+# Expose the custom port that you provided in the ENV var
+EXPOSE ${PORT}
+
+# Start Apache in the foreground
+CMD ["httpd", "-D", "FOREGROUND"]

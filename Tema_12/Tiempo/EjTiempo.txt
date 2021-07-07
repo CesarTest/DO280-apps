@@ -1,0 +1,67 @@
+EJERCICIO TIEMPO				Last Update: 5-Octubre-2020
+=================
+
+Se va a desplegar la aplicación Weather-app.
+
+En el repositorio GIT "https://github.com/tqvarnst/weather-app", en el branch "solution" está el código fuente
+de una aplicación Java EE 8 para ver el tiempo en distintos paises. 
+
+Desplegar dicha aplicación cumpliendo los requisitos de:
+
+	- Proyecto: debe llamarse "tiempoatm" con la descripción de "Aplicacion meteorologica" y el Display de "El tiempo".
+
+	- Usuario owner del proyeccto: "developer".
+
+	- Ruta insegura: en la URL "eltiempo.<dominio-ocp>".
+
+	- Ruta segura: tipo edge en la URL "eltiempo-seguro.<dominio-ocp>". 
+	  Generar el certificado y la clave con el comando openssl.
+
+	- Recursos: tendrán el nombre de "tiempo" y la etiqueta "util=tiempo".
+	
+NOTA: Como la aplicación es JEE 8, tengo que usar una imagen de contenedor de construcción de JBoss EAP 7.
+
+ Eliminar el proyecto al terminar.
+
+---------
+PASO 1 - CREAR Proyecto
+---------
+[student@workstation ~]$ oc login -u developer -p developer 
+[student@workstation ~]$ oc new-project tiempoatm --description='Aplicacion meteorologica' --display-name='El tiempo'
+[student@workstation ~]$ oc describe projects tiempoatm
+
+---------
+PASO 2 - CREAR Aplicacion
+---------
+2.1.- Source-to-Image... Compilando applicacion
+[student@workstation ~]$ oc get is -n openshift | grep eap
+[student@workstation ~]$ oc describe is -n openshift jboss-eap70-openshift
+[student@workstation ~]$ oc new-app --name=tiempo -l util=tiempo --as-deployment-config -i jboss-eap70-openshift:1.7~https://github.com/tqvarnst/weather-app#solution
+
+---------
+PASO 3 - CREAR Ruta simple
+---------
+[student@workstation ~]$ oc expose service tiempo --name=tiempo --hostname eltiempo.${RHT_OCP4_WILDCARD_DOMAIN}
+
+---------
+PASO 4 - CREAR Ruta segura
+---------
+
+.... 4.1.- Clave privada (.key)
+[student@workstation certs~]$ openssl genrsa -out tiempo.key 2048
+
+.... 4.2.- Clave Pública dentro de Solicitud Certificado (.csr)
+[student@workstation certs]$ openssl req -new  -subj "/C=US/ST=North Carolina/L=Raleigh/O=Red Hat/CN=eltiempo-seguro.${RHT_OCP4_WILDCARD_DOMAIN}"  -key tiempo.key -out tiempo.csr
+
+.... 4.3.- Verificar Solicitud Certificado
+[student@workstation certs]$ openssl req -text -noout -verify -in tiempo.csr > test.txt
+[student@workstation certs]$ vim test.txt
+
+.... 4.4.- Certificado (.crt) - Se hace como si fueramos una CA
+[student@workstation certs]$ openssl x509 -req -in tiempo.csr -signkey tiempo.key  -out tiempo.crt -days 1825 -sha256 
+
+.... 4.5.- Crear Ruta
+[student@workstation ~]$ oc create route edge tiemposec --service tiempo  --hostname eltiempo-seguro.${RHT_OCP4_WILDCARD_DOMAIN} --key tiempo.key --cert tiempo.crt --insecure-policy=Redirect
+
+
+==============================

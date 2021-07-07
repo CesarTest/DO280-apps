@@ -1,0 +1,437 @@
+=========================
+TEMA 13 - CONTROLLING POD SCHEDULING
+=========================
+
+oc explain  resourcequotas
+oc explain  resourcequotas.spec
+oc explain  resourcequotas --recursive=true
+
+----------
+GUIDED 1 - Controlling Pod Scheduling Behavior
+----------
+¡¡¡¡ Si las etiquetas no funcionan... se queda eternamente en pending !!!!!
+
+0.- Start
+--------
+[student@workstation ~]$ lab schedule-pods start
+
+
+1.- Create Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project schedule-pods
+
+2.- Deploy and expose application
+--------
+[student@workstation ~]$ oc new-app --name hello --docker-image quay.io/redhattraining/hello-world-nginx:v1.0
+[student@workstation ~]$ oc expose svc/hello
+[student@workstation ~]$ oc scale --replicas 4 deployment/hello
+[student@workstation ~]$ oc get pods -o wide
+
+3.- Switch Scheduler
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc get nodes -L env
+[student@workstation ~]$ oc label node master01 env=dev
+[student@workstation ~]$ oc label node master02 env=prod
+[student@workstation ~]$ oc get nodes -L env
+
+4.- Verify the rescheduling... everyting now moves to Master01
+--------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc edit deployment/hello
+
+...output omitted...
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+ dnsPolicy: ClusterFirst
+ 
+ nodeSelector: ----> Agregar seccion
+      env: dev
+ 
+ restartPolicy: Always
+...output omitted...
+
+[student@workstation ~]$ oc get pods -o wide
+[student@workstation ~]$ oc delete project schedule-pods
+
+5.- Remove labels
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc label node -l env env-
+
+6.- No hace scheduling porque no hay 
+--------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc project schedule-pods-ts
+[student@workstation ~]$ oc get pods
+------> Aquí esta en pending
+
+[student@workstation ~]$ oc describe pod hello-ts-5dbff9f44-8h7c7 
+
+#[student@workstation ~]$ oc get node -L 
+
+[student@workstation ~]$ oc edit deployment/hello-ts
+...output omitted...
+ dnsPolicy: ClusterFirst
+ nodeSelector:
+ client: ACME   ------------> Cambios aquí
+ restartPolicy: Always
+...output omitted...
+
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc describe pod hello-ts-5dbff9f44-8h7c7 | grep client
+
+7.- Finish
+--------
+[student@workstation ~]$ lab schedule-pods finish
+
+----------
+GUIDED 2 - Limiting Resource Usage by an Application
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab schedule-limit start
+
+1.- Crear proyecto 
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project schedule-limit
+
+2.- Incluir Quotas en el fichero de configuracion de recursos 
+--------
+[student@workstation ~]$ oc create deployment hello-limit  --image quay.io/redhattraining/hello-world-nginx:v1.0  --dry-run=client -o yaml > ~/DO280/labs/schedule-limit/hello-limit.yaml
+[student@workstation ~]$ vim ~/DO280/labs/schedule-limit/hello-limit.yaml
+
+........
+...output omitted...
+ spec:
+ containers:
+ - image: quay.io/redhattraining/hello-world-nginx:v1.0
+   name: hello-world-nginx
+   
+              -------> Add this block
+   resources:
+     requests:
+       cpu: "3"
+       memory: 20Mi
+	   
+	           -------> Add this block
+   status: {}
+.......
+
+[student@workstation ~]$ oc create --save-config  -f ~/DO280/labs/schedule-limit/hello-limit.yaml
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc get events --field-selector type=Warning
+
+3.-  Modify Quotas
+--------
+
+[student@workstation ~]$ vim ~/DO280/labs/schedule-limit/hello-limit.yaml
+
+.........
+...output omitted...
+ resources:
+    requests:
+      cpu: "1200m" ----> Replace
+      memory: 20Mi
+........
+
+[student@workstation ~]$ oc apply -f ~/DO280/labs/schedule-limit/hello-limit.yaml
+[student@workstation ~]$ oc get pod
+
+4.- Scale replicas, check that only one is allowed
+--------
+[student@workstation ~]$ oc scale --replicas 4 deployment/hello-limit
+[student@workstation ~]$ oc get pods
+
+Note
+If your application pod still does not deploy, scale the number of application pods to
+zero and then modify ~/DO280/labs/schedule-limit/hello-limit.yaml
+to reduce the CPU request to 1000m. Run oc apply -f ~/DO280/labs/
+schedule-limit/hello-limit.yaml to apply the changes then rerun the oc
+scale command to scale out to four pods
+
+
+[student@workstation ~]$ oc get events --field-selector type=Warning
+[student@workstation ~]$ oc delete all -l app=hello-limit
+
+
+5.- Launch new Deploy
+--------
+[student@workstation ~]$ oc create --save-config  -f ~/DO280/labs/schedule-limit/loadtest.yaml
+[student@workstation ~]$ oc get routes
+
+6.- Verify Workloads
+--------
+---> Terminal 2... Abre otro terminal
+[student@workstation ~]$ watch oc get pods 
+
+---> Terminal 3... Abre otro terminal
+[student@workstation ~]$ watch oc adm top pod 
+
+---> Terminal 1
+[student@workstation ~]$ curl -X GET  http://loadtest.apps.ocp4.example.com/api/loadtest/v1/mem/150/60
+
+----> Terminal 2
+Every 2.0s: oc get pods ...
+
+NAME READY STATUS RESTARTS AGE
+loadtest-f7495948-tlxgm 1/1 Running 0 7m34s
+
+----> Terminal 3
+.....
+Every 2.0s: oc adm top pod ...
+
+NAME CPU(cores) MEMORY(bytes)
+loadtest-f7495948-tlxgm 0m 20Mi
+
+Every 2.0s: oc adm top pod ...
+
+NAME CPU(cores) MEMORY(bytes)
+loadtest-f7495948-tlxgm 0m 172Mi
+
+
+Every 2.0s: oc adm top pod ...
+
+NAME CPU(cores) MEMORY(bytes)
+loadtest-f7495948-tlxgm 0m 20Mi
+........
+
+[student@workstation ~]$ curl -X GET  http://loadtest.apps.ocp4.example.com/api/loadtest/v1/mem/150/60
+
+7.- Change Quota via API
+--------
+---> Terminal 1
+[student@workstation ~]$ curl -X GET  http://loadtest.apps.ocp4.example.com/api/loadtest/v1/mem/200/60
+[student@workstation ~]$ oc delete all -l app=loadtest
+
+8.- Quotas at Project level
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc create quota project-quota  --hard cpu="3",memory="1G",configmaps="3"  -n schedule-limit
+
+9.- Create Quota inside ConfigMaps
+--------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ for X in {1..4} ; do oc create configmap my-config${X} --from-literal key${X}=value${X} ; done
+
+10.- Create Quota on Project creation
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc adm create-bootstrap-project-template  -o yaml > /tmp/project-template.yaml
+[student@workstation ~]$ vim /tmp/project-template.yaml
+.......
+...output omitted...
+         -----------------------> AGREGAR BLOQUE
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+      name: ${PROJECT_NAME}-quota
+  spec:
+      hard:
+         cpu: 3
+         memory: 10G
+
+- apiVersion: v1
+  kind: LimitRange
+  metadata:
+       name: ${PROJECT_NAME}-limits
+  spec:
+       limits:
+          - type: Container
+            defaultRequest:
+                cpu: 30m
+                memory: 30M
+         -----------------------> AGREGAR BLOQUE     
+parameters:
+- name: PROJECT_NAME
+- name: PROJECT_DISPLAYNAME
+- name: PROJECT_DESCRIPTION
+- name: PROJECT_ADMIN_USER
+- name: PROJECT_REQUESTING_USER
+......
+
+
+[student@workstation ~]$ oc create -f /tmp/project-template.yaml -n openshift-config
+[student@workstation ~]$ oc get template -n openshift-config 
+[student@workstation ~]$ oc describe template project-request -n openshift-config > project-request.txt 
+[student@workstation ~]$ oc edit projects.config.openshift.io/cluster
+.......
+...output omitted...
+spec:
+ projectRequestTemplate:
+    name: project-request
+........
+
+[student@workstation ~]$ watch oc get pods -n openshift-apiserver
+[student@workstation ~]$ oc new-project template-test
+Now using project "template-test" on server "https://api.ocp4.example.com:6443".
+
+[student@workstation ~]$ oc get resourcequotas,limitranges
+
+11.- Clean Environment
+--------
+[student@workstation ~]$ oc delete project schedule-limit
+[student@workstation ~]$ oc delete project template-test 
+ 
+12.- Finish
+--------
+[student@workstation ~]$ lab schedule-limit finish
+
+
+----------
+GUIDED 3 - Scaling an Application
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab schedule-scale start
+
+1.- Create new Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project schedule-scale
+
+2.- Set Quota & Limits
+--------
+[student@workstation ~]$ vim ~/DO280/labs/schedule-scale/loadtest.yaml
+........
+...output omitted...
+ spec:
+    containers:
+      - image: quay.io/redhattraining/loadtest:v1.0
+        name: loadtest
+		
+		------------------------------------> Incluir Bloque
+        resources:
+           requests:
+              cpu: "25m"
+              memory: 25Mi
+           limits:
+              cpu: "100m"
+              memory: 100Mi
+		------------------------------------> Incluir Bloque
+status: {}
+......
+
+[student@workstation ~]$ oc create --save-config  -f ~/DO280/labs/schedule-scale/loadtest.yaml
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc describe pod/loadtest-5f9565dbfb-jm9md | grep -A2 -E "Limits|Requests"
+
+3.- Manually Scale Replicas
+--------
+[student@workstation ~]$ oc scale --replicas 5 deployment/loadtest
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc scale --replicas 1 deployment/loadtest
+[student@workstation ~]$ oc get pod
+
+4.- Autoscale replicas
+--------
+[student@workstation ~]$ oc autoscale deployment/loadtest  --min 2 --max 10 --cpu-percent 50
+[student@workstation ~]$ watch oc get hpa/loadtest
+[student@workstation ~]$ oc get route/loadtest
+[student@workstation ~]$ curl -X GET  http://loadtest-schedule-scale.apps.ocp4.example.com/api/loadtest/v1/cpu/1
+curl: (52) Empty reply from 
+
+[student@workstation ~]$ watch oc get hpa/loadtest
+
+5.- Deploy application & Scale
+--------
+[student@workstation ~]$ oc new-app --name scaling --as-deployment-config  --docker-image quay.io/redhattraining/scaling:v1.0
+[student@workstation ~]$ oc expose svc/scaling
+[student@workstation ~]$ oc scale --replicas 3 dc/scaling
+[student@workstation ~]$ oc get pods -o wide -l deploymentconfig=scaling
+[student@workstation ~]$ oc get route/scaling
+[student@workstation ~]$ ~/DO280/labs/schedule-scale/curl-route.sh
+
+
+6.- Monitor Activity
+--------
+---> En otro terminal
+[student@workstation ~]$ watch oc get hpa/loadtest 
+
+7.- Delete project
+--------
+[student@workstation ~]$ oc delete project schedule-scale
+
+8.- Finish
+--------
+[student@workstation ~]$ lab schedule-scale finish
+
+----------
+LAB - 
+----------
+
+0.- Start 
+--------
+[student@workstation ~]$ lab schedule-review start
+
+1.- Label Nodes as Master01, tier=gold... Master01, tier=silver
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc label node master01 tier=gold
+[student@workstation ~]$ oc label node master02 tier=silver
+[student@workstation ~]$ oc get nodes -L tier
+
+2.- Create project 'schedule-review' as user developer
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project schedule-review
+
+3.- Deploy application with quota request "cpu=100m" "memory: 10G"
+--------
+[student@workstation ~]$ mkdir ~/DO280/labs/schedule-review/
+[student@workstation ~]$ oc create deployment loadtest  --image quay.io/redhattraining/loadtest:v1.0  --dry-run=client -o yaml > ~/DO280/labs/schedule-review/loadtest-limit.yaml
+[student@workstation ~]$ vim ~/DO280/labs/schedule-review/loadtest-limit.yaml
+
+...output omitted...
+ spec:
+    template:
+	
+...output omitted...	
+	   spec:
+	      nodeSelector:
+		     tier: silver
+		  containers:
+ 		  
+			resources:
+				requests:
+					cpu: "100m" 
+					memory: 20Mi
+........
+
+[student@workstation ~]$ oc create --save-config  -f ~/DO280/labs/schedule-review/loadtest-limit.yaml
+[student@workstation ~]$ oc apply  -f ~/DO280/labs/schedule-review/loadtest-limit.yaml
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc get events --field-selector type=Warning
+[student@workstation ~]$ oc edit deployment/loadtest
+[student@workstation ~]$ oc get pods -o wide
+
+4.- Create the route
+--------
+[student@workstation ~]$ oc logs -f loadtest 
+[student@workstation ~]$ oc expose deployment/loadtest --target-port=8080 --port=80
+[student@workstation ~]$ oc get all
+[student@workstation ~]$ oc expose service loadtest
+[student@workstation ~]$ curl http://loadtest-schedule-review.apps.ocp4.example.com/api/loadtest/v1/healthz 
+
+5.- Create horizontal autoscaler
+--------
+[student@workstation ~]$ oc autoscale deployment/loadtest  --min 2 --max 40 --cpu-percent 70
+[student@workstation ~]$ curl -X GET http://loadtest-schedule-review.apps.ocp4.example.com/api/loadtest/v1/cpu/3
+
+---> Terminal 2
+[student@workstation ~]$ watch oc get hpa/loadtest
+[student@workstation ~]$ oc get route/loadtest
+
+6.- Set Quota to the project
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc create quota review-quota --hard cpu="1",memory="2G",pods="20"
+
+7.- Finish
+--------
+[student@workstation ~]$ lab schedule-review grade
+[student@workstation ~]$ lab schedule-review finish

@@ -1,0 +1,27 @@
+EJERCICIO PACMAN - PARTE 3			Last Update: 5-Octubre-2020
+===========================
+
+Tras desplegar la aplicación Pacman del proyecto "pacman" y crear una ruta no segura (parte 1), solucionar el error de conexión a la BBDD (parte 2), ahora se va a crear una ruta securizada llamada "pacmansec" de tipo edge a la aplicación con la URL "pacman-seguro.<dominio-ocp>".
+
+Una vez creada la ruta segura y verificado que funciona bien, borrar la ruta segura.
+
+--------
+1.- Login to Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc project pacman
+
+--------
+2.- Create Edge Route
+--------
+[student@workstation network-ingress]$ oc create route edge pacmansec --service pacman  --hostname pacman-seguro.apps.ocp4.example.com
+
+--------
+3.- Verificar
+--------
+[student@workstation network-ingress]$ curl --cacert tls.cert https://pacman-seguro.apps.ocp4.example.com
+[student@workstation network-ingress]$ 
+
+Firefox -> https://pacman-seguro.apps.ocp4.example.com
+
+

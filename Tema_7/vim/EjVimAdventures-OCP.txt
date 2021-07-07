@@ -1,0 +1,15 @@
+EJERCICIO VIM-ADVENTURES OPENSHIFT 		Last Update: 7-Septiembre-2020
+==================================
+
+Desplegar la app "Vim Adventures".
+
+Se obtendrá el código fuente de: 
+
+	https://github.com/wattry/vim-adventures
+
+y se clonará en la cuenta de Github del alumno.
+
+Todos los recursos de la app deben tener el nombre de "adventure".
+
+Crear un PVC para el volumen "saved" que añadiremos a la app usando la definición de PVC del fichero pvc-vimadv.yaml. El volumen debe montarse en la ruta del contenedor: /home/node/vim-adventures/saved
+

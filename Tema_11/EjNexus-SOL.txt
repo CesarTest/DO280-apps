@@ -1,0 +1,70 @@
+EJERCICIO NEXUS EN OPENSHIFT 		SOLUCIÓN		Last Update: 21-Abril-2021
+============================
+
+Desplegar la app "Nexus" en versión 2 sin almacenamiento persistente en el proyecto "mi-nexus" con el usuario developer.
+
+NOTA: Nexus (de la empresa Sonatype) es un repositorio de software con soporte para repositorios de software de varios tipos, Maven para Java, 
+	imágenes de Docker, paquetes npm para JavaScript  además de artefactos para los lenguajes Python y Go.
+
+Se obtendrá la plantilla de: 
+
+	https://github.com/OpenShiftDemos/nexus
+
+Se crearán dentro del proyecto todas las plantillas de Nexus versión 2 y 3 aunque sólo se procese la versión 2 sin almacenamiento persistente.
+
+Todos los recursos de la app deben tener el nombre de "nexus" y la ruta debe estar en la URL: mi-nexus.<WILDCARD-OCP>
+
+
+SOLUCIÓN
+========
+
+1.- Con el usuario "developer", creo el proyecto "mi-nexus":
+
+	oc login -u ${RHT_OCP4_DEV_USER} -p ${RHT_OCP4_DEV_PASSWORD} ${RHT_OCP4_MASTER_API}
+	oc new-project mi-nexus
+
+2.- Reviso las plantillas existentes en la URL de GitHub dada:  https://github.com/OpenShiftDemos/nexus
+
+3.- Creo las plantillas en el proyecto:
+
+	oc create -f https://raw.githubusercontent.com/OpenShiftDemos/nexus/master/nexus2-template.yaml
+	oc create -f https://raw.githubusercontent.com/OpenShiftDemos/nexus/master/nexus2-persistent-template.yaml
+	oc create -f https://raw.githubusercontent.com/OpenShiftDemos/nexus/master/nexus3-template.yaml
+	oc create -f https://raw.githubusercontent.com/OpenShiftDemos/nexus/master/nexus3-persistent-template.yaml
+	oc get template
+
+4.- Proceso la plantilla de nexus versión 2 sin almacenamiento persistente:
+
+ 4.1.- Veo los parámetros que lleva y decido los valores:
+
+	oc process --parameters nexus2	-> veo SERVICE_NAME, NEXUS_VERSION y MAX_MEMORY  -> dejo valores por defecto
+
+	
+ 4.2.- Proceso la plantilla para crear los recursos: 2 opciones
+
+  Opción 1: comando oc process
+
+	oc process nexus2 | oc create -f
+
+  Opción 2: comando oc new-app:
+
+	oc new-app nexus2 --template=nexus2 --name=nexus --as-deployment-config
+
+5.- Modifico la ruta creada por la plantilla:
+
+ Si intento editarla con: "oc edit route nexus", el parámetro "hostname" es de lectura sólo (con usuario developer), asi que lo hago de otra forma.
+ Exporto el recurso a un fichero, borro la ruta, modifico el parámetro hostname del fichero y creo la ruta a partir de ese fichero:
+
+	oc get -o yaml route nexus > miruta.yaml
+	oc delete route nexus
+	vim miruta.yaml
+	oc create -f miruta.yaml
+	oc get route
+
+6.- Accedo a la app desde el navegador a la ruta.
+
+FIN
+
+
+Ref.: 	https://blog.irontec.com/utilizando-repositorio-artefactos-privado-nexus-oss/ 
+	

@@ -1,0 +1,72 @@
+=========================
+TEMA 2 - CONTAINERIZED SERVICES
+=========================
+
+----------
+GUIDED 1 - Creating MySQL Database Instance
+----------
+
+0.- Start Lab
+--------
+[student@workstation ~]$ lab container-create start
+
+1.- Launch Podman -> MySQL
+---------
+..... 1.1.- Create
+[student@workstation ~]$ sudo podman run --name mysql-basic -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55  -e MYSQL_DATABASE=items -e MYSQL_ROOT_PASSWORD=r00tpa55 -d rhscl/mysql-57-rhel7:5.7-3.14
+
+..... 1.2.- Verify
+[student@workstation ~]$ sudo podman ps --format "{{.ID}} {{.Image}} {{.Names}}" 
+
+92eaa6b67da0 registry.access.redhat.com/rhscl/mysql-57-rhel7:5.7-3.14 mysql-basic
+
+2.- Launch Podman -> MySQL
+---------
+[student@workstation ~]$ sudo podman exec -it mysql-basic /bin/bash
+
+3.- Add data to database
+---------
+bash-4.2$ mysql -uroot
+mysql> show databases;
+mysql> use items;
+mysql> CREATE TABLE Projects (id int(11) NOT NULL, name varchar(255) DEFAULT NULL, code varchar(255) DEFAULT NULL, PRIMARY KEY (id))
+mysql> show tables;
+mysql> insert into Projects (id, name, code) values (1,'DevOps','DO180');
+mysql> select * from Projects;
+mysql> exit
+bash-4.2$ exit
+
+4.- Finish Lab
+--------
+[student@workstation ~]$ lab container-create finish
+
+
+----------
+LAB EXTRA - Creating Containarized Services
+----------
+
+0.- Start Lab
+--------
+[student@workstation ~]$ lab container-review start
+
+1.- Start cointainer httpd-basic
+--------
+[student@workstation ~]$ sudo podman inspect httpd-basic
+[student@workstation ~]$ sudo podman run -d -p 8080:80 --name httpd-basic -d redhattraining/httpd-parent:2.4   
+
+2.- Test container
+--------
+[student@workstation ~]$ curl http://localhost:8080
+
+3.- Change Index.html
+---------
+[student@workstation ~]$ sudo podman exec -it httpd-basic /bin/bash
+bash-4.4# ls -la /var/www/html
+bash-4.4# echo "Hello World" > /var/www/html/index.html
+bash-4.4# exit
+[student@workstation ~]$ curl http://localhost:8080
+
+4.- Grade
+---------
+[student@workstation ~]$ lab container-review grade
+ 

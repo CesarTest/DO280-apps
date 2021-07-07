@@ -1,0 +1,167 @@
+EJERCICIO PACMAN - PARTE 2				Last Update: 9-Septiembre-2020
+===========================
+
+Tras desplegar la aplicación Pacman del proyecto "pacman", solucionar el error que sale en los logs de la aplicación:
+
+	"MongoError: failed to connect to server...."
+
+ desplegando en el mismo proyecto una BBDD MongoDB no persistente usando una plantilla "mongodb-ephemeral" del proyecto OpenShift con los cambios:
+
+	- La versión de MongoDB se ajustará lo más posible a la indicada por la app.
+	  Pista: mirar el fichero "package.json"
+
+	- El usuario de la BBDD debe ser "gamer" con password "results".
+
+	- El parámetro del nombre de la BBDD debe ser "pacman" parámetro obligatorio para procesar la plantilla y fallará si no se proporciona.
+
+Y modificando el DC de la app para que las variables de entorno de contenedor de la app deben corresponder a las que necesita la app.
+	  Pista: mirar el fichero "config.js" del directorio "lib" del código fuente.
+
+
+SOLUCIÓN
+========
+
+1.- Veo los logs del pod:
+
+	MIPOD=$(oc get pod | grep -i running | cut -d ' ' -f1)
+	oc logs -f $MIPOD
+
+2.- Miro el fichero del código fuente "config.js" y "package.json":
+
+	cd ~/Apps			Si no tengo ya el código en local, hacer: git clone https://github.com/<GITHUB-USER>/pacman 
+	cat pacman/lib/config.js		
+
+  veo que usa unas variables de entorno:
+	MONGO_SERVICE_HOST=localhost		-> El servicio tienen que llamarse "mongo" para que al inyectarse como variable en el contenedor de la app sea así
+	MONGO_PORT=27017			-> Puerto por defecto, puedo obviarlo
+	MONGO_DATABASE				-> Tienen que estar en el contenedor del pod de la app definida
+	además de MONGO_AUTH_USER y MONGO_AUTH_PWD	-> Tienen que estar en el contenedor del pod de la app definidas
+	
+	cat pacman/package.json
+
+  veo que usa la versión 2.2.24 de MongoDB. -> Mirar los IS del proyecto OpenShift y buscar en RHCC una versión parecida creando un IS en el proyecto.
+
+3.- Busco las plantillas de MongoDB del proyecto OpenShift:
+
+	oc get templates -n openshift | grep -i mongodb   -> se llama "mongodb-ephemeral"	
+	
+4.- Miro los parámetros que lleva:
+
+	oc process mongodb-ephemeral --parameters -n openshift
+
+  Veo: 	DATABASE_SERVICE_NAME=mongodb   -> pongo "mongo"
+ 	MONGODB_USER genera uno		-> pongo "gamer"
+	MONGODB_PASSWORD genera uno	-> pongo "results"
+	MONGODB_DATABASE=sampledb	-> pongo "pacman"
+	MONGODB_ADMIN_PASSWORD genera	-> pongo "results"
+	MONGODB_VERSION=3.6		-> pongo 2.4
+
+5.- Miro los IS de Mongo DB del proyecto OpenShift:
+
+	oc get is -n openshift | grep -i mongo		-> se llama "mongodb"
+	oc describe is mongodb -n openshift		-> versiones 3.2,3.4,3.6,latest
+	
+  necesito una versión 2, busco en RHCC: https://catalog.redhat.com/software/containers/openshift3/mongodb-24-rhel7/57ea8cf49c624c035f96f3d3
+
+	sudo podman search mongodb		-> registry.redhat.io/openshift3/mongodb-24-rhel7
+
+ creo el IS en el proyecto actual para la IC esta:
+
+	oc import-image mongodb --confirm --from=registry.redhat.io/openshift3/mongodb-24-rhel7   -> Da error, hay que autenticar en RH, pruebo con el público
+	oc delete is mongodb
+	oc import-image mongodb:2.4 --confirm --from=registry.access.redhat.com/openshift3/mongodb-24-rhel7 -> OK
+
+6.- Exporto a fichero la plantilla:
+
+	oc get -o yaml template mongodb-ephemeral -n openshift > miplantilla.yaml
+
+7.- Hago cambios en la plantilla:
+
+  En labels cambio: "labels:   template: mongodb-ephemeral" -> "labels:   template: mongodb-ephemeral-custom"
+
+  En los metadatos, cambio:
+	"name: mongodb-ephemeral" -> "name: mongodb-ephemeral-custom"
+	y borro la línea siguiente de "namespace: openshift"
+ 	 
+  En el DC, en el trigger de imageChangeParams, veo que el ISTag se llama "mongodb" y lo va a buscar en el namespace que está en el parámetro ${NAMESPACE}, cambiar parámetro
+
+  En los parámetros cambio:
+	parámetro "MONGODB_DATABASE", elimino la línea "value: sampledb"
+	parámetro "MONGODB_VERSION", dejo como valor por defecto 2.4  o al procesar la plantilla pongo esta versión
+	parámetro "NAMESPACE", elimino la línea "value: openshift" y añado la línea: "required: true"
+	parámetro "DATABASE_SERVICE_NAME" -> pongo como valor por defecto "mongo"
+
+8.- Creo la plantilla en el proyecto actual y verifico:
+
+	oc create -f miplantilla.yaml
+	oc process mongodb-ephemeral-custom --parameters
+	oc process mongodb-ephemeral-custom			-> NAMESPACE y MONGODB_DATABASE son obligatorios
+
+9.- Proceso la plantilla:
+
+	oc new-app --template=mongodb-ephemeral-custom -p MONGODB_USER=gamer -p MONGODB_PASSWORD=results -p MONGODB_DATABASE=pacman -p MONGODB_ADMIN_PASSWORD=results -p NAMESPACE=pacman
+
+  o con:
+
+	oc process mongodb-ephemeral-custom -p MONGODB_USER=gamer -p MONGODB_PASSWORD=results -p MONGODB_DATABASE=pacman -p MONGODB_ADMIN_PASSWORD=results -p NAMESPACE=pacman | oc create -f -
+
+10.- Escalo a 0 la app y modifico el DC de la app creando las variables de entorno que necesita la app vacías:
+
+	oc scale dc/mipacman --replicas=0
+	oc set env dc/mipacman MONGO_AUTH_USER= MONGO_AUTH_PWD= MONGO_DATABASE=
+
+11.- Edito el DC de la app para poner el key del secret correspondiente en cada variable:
+
+	oc edit dc mipacman	-> spec -> template -> spec -> containers -> env    y copio lo del otro DC quedando así
+
+-----------------------------------------------------------
+.... 
+     - env:         
+        - name: MONGO_AUTH_USER
+          valueFrom: 
+            secretKeyRef:
+              key: database-user
+              name: mongo
+        - name: MONGO_AUTH_PWD
+          valueFrom: 
+            secretKeyRef:
+              key: database-password
+              name: mongo
+        - name: MONGO_DATABASE
+          valueFrom: 
+            secretKeyRef:
+              key: database-name
+              name: mongo
+--------------------------------------------------------------
+
+12.- Escalo a 1 la app:
+
+	oc scale dc/mipacman --replicas=1
+	MIPOD=$(oc get pod | grep -i running | grep pacman | cut -d ' ' -f1)
+	oc logs -f $MIPOD  ->   Failed to connect to database server
+
+  dos líneas más arriba se ve esto que tienen mala pinta: mongodb://gamer:results@172.30.77.106:tcp://172.30.77.106:27017/pacman
+ port 8080
+
+	oc exec $MIPOD env | grep -i ^mongo
+
+   problema: MONGO_PORT es una variable que inyecta OCP para el descubrimiento de servicios con valor tcp://172.30.77.106:27017 que usa mal la app
+
+  inyecto la variable con el valor del puerto donde está MongoDB:
+
+	oc get svc mongo 		-> veo el puerto 27017
+
+	oc set env dc mipacman MONGO_PORT=27017
+
+  y la app automáticamente se redespliega, miro los logs a ver que pasa ahora:
+
+	MIPOD=$(oc get pod | grep -i running | grep pacman | cut -d ' ' -f1)
+   	oc logs -f $MIPOD					-> ahora dice "Connected to database server successfully"
+
+ Ahora si juego, se guardan los datos de las partidas en la BBDD
+
+13.- Borro el proyecto:
+
+	oc delete project <nombre>-pacman
+
+FIN

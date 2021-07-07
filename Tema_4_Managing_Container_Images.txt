@@ -1,0 +1,120 @@
+=========================
+TEMA 4 - MANAGING CONTAINER IMAGES
+=========================
+
+----------
+GUIDED 1 - Creating a Custom Apache Container Image
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab image-operations start
+
+1.- Login quay.io
+--------
+[student@workstation ~]$ sudo podman login quay.io
+Username: andepiel45
+Password: ciscousa45
+
+[student@workstation ~]$ sudo podman run -d --name official-httpd -p 8180:80 redhattraining/httpd-parent
+
+2.- Customize image
+--------
+[student@workstation ~]$ sudo podman exec -it official-httpd /bin/bash
+bash-4.4# echo "DO180 Page" > /var/www/html/do180.html
+bash-4.4# exit
+
+[student@workstation ~]$ curl 127.0.0.1:8180/do180.html
+
+3.- Check differences
+--------
+[student@workstation ~]$ sudo podman diff official-httpd
+
+
+4.- Stop container + commit changes
+--------
+[student@workstation ~]$ sudo podman stop official-httpd
+[student@workstation ~]$ sudo podman commit -a 'Cesar Delgado' official-httpd do180-custom-httpd
+[student@workstation ~]$ sudo podman images
+
+5.- Push image to Registry
+-------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+[student@workstation ~]$ sudo podman tag do180-custom-httpd quay.io/${RHT_OCP4_QUAY_USER}/do180-custom-httpd:v1.0
+[student@workstation ~]$ sudo podman images
+[student@workstation ~]$ sudo podman push quay.io/${RHT_OCP4_QUAY_USER}/do180-custom-httpd:v1.0
+[student@workstation ~]$ sudo podman pull -q quay.io/${RHT_OCP4_QUAY_USER}/do180-custom-httpd:v1.0
+
+6.- Restart container
+-------
+[student@workstation ~]$ sudo podman run -d --name test-httpd -p 8280:80 ${RHT_OCP4_QUAY_USER}/do180-custom-httpd:v1.0
+
+7.- Verify 
+-------
+[student@workstation ~]$ curl http://localhost:8280/do180.html
+
+8.- Finish
+--------
+[student@workstation ~]$ lab image-operations finish
+
+----------
+LAB - Managing Images
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab image-review start
+
+1.- Pull Image
+--------
+[student@workstation ~]$ sudo podman pull -q quay.io/redhattraining/nginx:1.17  
+
+2.- Run container
+--------
+[student@workstation ~]$ sudo podman run -d --name official-nginx -p 8080:80 nginx:1.17 
+curl 127.0.0.1:8080/index.html
+
+3.- Customize container
+--------
+[student@workstation ~]$ sudo podman exec -it official-nginx /bin/bash
+bash-4.4# echo "DO180" > /usr/share/nginx/html/index.html
+bash-4.4# exit
+[student@workstation ~]$ curl 127.0.0.1:8080/index.html
+
+4.- Stop + Create Custom Image
+--------
+[student@workstation ~]$ sudo podman stop nginx:1.17 
+[student@workstation ~]$ sudo podman commit -a 'Cesar Delgado' official-nginx do180/mynginx:v1.0-SNAPSHOT
+[student@workstation ~]$ sudo podman images
+
+5.- Run new Container from Custom Image
+--------
+[student@workstation ~]$ sudo podman run -d --name official-nginx-dev -p 8080:80  do180/mynginx:v1.0-SNAPSHOT
+
+6.- Customize container
+--------
+[student@workstation ~]$ sudo podman exec -it official-nginx-dev /bin/bash
+bash-4.4# echo "DO180 Page" > /usr/share/nginx/html/index.html
+bash-4.4# exit
+[student@workstation ~]$ 
+
+7.- Stop + Create Custom Image
+--------
+[student@workstation ~]$ sudo podman stop official-nginx-dev
+[student@workstation ~]$ sudo podman commit -a 'Cesar Delgado' official-nginx-dev do180/mynginx:v1.0
+[student@workstation ~]$ sudo podman images
+
+8.- Remove container image
+--------
+[student@workstation ~]$ sudo podman rmi do180/mynginx:v1.0-SNAPSHOT
+
+9.- Run container
+--------
+[student@workstation ~]$ sudo podman run -d --name my-nginx -p 8280:80  do180/mynginx:v1.0
+[student@workstation ~]$ curl 127.0.0.1:8280/index.html
+
+
+10.- Finish
+--------
+[student@workstation ~]$ lab image-review grade
+[student@workstation ~]$ lab image-review finish

@@ -1,0 +1,109 @@
+=========================
+TEMA EXTRA - RED HAT OPENSHIFT I: CONTAINERS & KUBERNETES
+=========================
+
+----------
+GUIDED 1 - Containerizing and Deploying a Software Application
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab comprehensive-review start
+
+
+1.- Create container image & start an instance of Nexus Server
+--------
+.... 1.1.- Retrieve Source Code
+[student@workstation] cd /home/student/DO180/labs/comprehensive-review/image
+[student@workstation image] get-nexus-bundle.sh
+
+.... 1.2.- Create Image
+[student@workstation image] vim Dockerfile
+
+#------------------------------
+# CREATE NEXUS IMAGE
+#------------------------------
+
+# 1.- Image Description
+FROM ubi7/ubi:7.7
+
+MAINTAINER Cesar Delgado <andepiel45@hotmail.com>
+
+ARG NEXUS_VERSION=2.14.3-02  
+ENV NEXUS_HOME=/opt/nexus
+
+# 2.- Add extra repository
+#ADD ./training.repo /etc/yum.repos.d/
+
+# 3.- Install required packages
+RUN yum update && \ 
+    yum install -y --setopt=tsflags=nodocs java-1.8.0-openjdk-devel && \
+    yum clean all
+
+# 4.- Create Users
+RUN groupadd -r nexus -f -g 1001 && \
+    useradd -u 1001 -r -g nexus -m -d ${NEXUS_HOME} -s /sbin/nologin -c "Nexus User" nexus && \
+    chown -R nexus:nexus ${NEXUS_HOME} && \
+    chmod -R 755 ${NEXUS_HOME}
+	
+# 5.- Prepate Launching Process 	
+USER nexus
+
+ADD ./nexus-2.14.3-02-bundle.tar.gz ${NEXUS_HOME}/ 
+ADD ./nexus-start.sh ${NEXUS_HOME}/ 
+RUN ln -s ${NEXUS_HOME}/nexus-${NEXUS_VERSION} ${NEXUS_HOME}/nexus2
+
+# 6.- Launcher
+WORKDIR ${NEXUS_HOME}
+VOLUME ["/opt/nexus/sonatype-work"]
+CMD ["sh", "nexus-start.sh"]
+
+#------------------------------
+# END CREATE NEXUS IMAGE
+#------------------------------
+
+[student@workstation image] sudo podman build --layers=false -t nexus .
+
+
+2.- Run application & Verify
+--------
+[student@workstation image]$ /home/student/DO180/labs/comprehensive-review/deploy/local/run-persistent.sh
+[student@workstation image]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Image}}"
+[student@workstation image]$ sudo podman inspect -f '{{.NetworkSettings.IPAddress}}' <name>
+[student@workstation image]$ curl -v 10.88.100.105:8081/nexus/ 2>&1  | grep -E 'HTTP|<title>'
+[student@workstation image]$ sudo podman kill <name>
+
+3.- Deploy application using OpenShift
+--------
+.... 3.1.- Label and Upload Image
+[student@workstation image]$ sudo podman tag quay.io/${RHT_OCP4_QUAY_USER}/nexus:latest <name>
+[student@workstation image]$ sudo podman login quay.io -u ${RHT_OCP4_QUAY_USER}
+[student@workstation image]$ sudo podman push  quay.io/${RHT_OCP4_QUAY_USER}/nexus:latest
+
+.... 3.2.- Create Project
+[student@workstation image]$ oc login
+username: developer
+password: developer
+
+[student@workstation image]$ oc new-project ${RHT_OCP4_DEV_USER}-review2
+[student@workstation image]$ cd ../
+[student@workstation comprensive-review]$ oc process -o json -f deploy/openshift/resources/nexus-template.json -p RHT_OCP4_QUAY_USER=${RHT_OCP4_QUAY_USER} | oc create -f -
+[student@workstation comprensive-review]$ oc get pods
+[student@workstation comprensive-review]$ oc expose service nexus 
+[student@workstation comprensive-review]$ echo http://nexus-${RHT_OCP4_DEV_USER}-review.${RHT_OCP4_WILDCARD_DOMAIN}/nexus/
+
+Firefox ->  http://nexus-developer-review2.apps.oc4.example.com/nexus/
+
+http://nexus-developer-review2.apps.oc4.example.com:8080 ====> ¿Por qué hay ruta a 8080?
+
+[student@workstation comprensive-review}$ cd ~
+
+4.- Finish
+-------
+[student@workstation ~]$ lab comprehensive-review grade
+[student@workstation ~]$ lab comprehensive-review finish
+
+----------
+CREACIÓN DE RUTAS 
+----------
+.... ¿Por qué hay ruta al 8080?

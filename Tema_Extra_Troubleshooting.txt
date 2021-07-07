@@ -1,0 +1,217 @@
+=========================
+TEMA EXTRA - TROUBLESHOOTING CONTAINERIZED APPLICATIONS
+=========================
+
+----------
+GUIDED 1 - Troubleshooting an OpenShift Build
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab troubleshoot-s2i start
+
+1.- Load Environment
+--------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+
+2.- Change to GIT Master Branch
+--------
+[student@workstation ~]$ cd ~/DO180-appsvim ~/DO180-apps/nodejs-helloworld/package.json
+[student@workstation DO180-apps]$ git checkout master
+
+3.- Create new GIT branch
+--------
+[student@workstation DO180-apps]$ git checkout -b troubleshoot-s2i
+[student@workstation DO180-apps]$ git push -u origin troubleshoot-s2i
+
+4.- Create Project
+--------
+[student@workstation DO180-apps]$ oc login -u "${RHT_OCP4_DEV_USER}"  -p "${RHT_OCP4_DEV_PASSWORD}"
+[student@workstation DO180-apps]$ oc new-project ${RHT_OCP4_DEV_USER}-nodejs
+
+5.- Create Application and check logs
+--------
+[student@workstation DO180-apps]$ oc get is
+[student@workstation DO180-apps]$ oc describe is nodejs
+[student@workstation DO180-apps]$ oc new-app --context-dir=nodejs-helloworld  https://github.com/${RHT_OCP4_GITHUB_USER}/DO180-apps#troubleshoot-s2i  -i nodejs:12 --name nodejs-hello --build-env  npm_config_registry=http://${RHT_OCP4_NEXUS_SERVER}/repository/npm-proxy
+
+[student@workstation DO180-apps]$ oc get pods -w
+[student@workstation DO180-apps]$ oc logs bc/nodejs-hello
+
+6.- Fix Error 1: dependencies
+--------
+[student@workstation DO180-apps]$ 
+{
+ "name": "nodejs-helloworld",
+...output omitted...
+ "dependencies": {
+    "express": "4.14.x"
+ }
+}
+[student@workstation DO180-apps]$ git commit -am "Fixed Express release"
+[student@workstation DO180-apps]$ git push
+
+7.- Relaunch build app
+--------
+[student@workstation DO180-apps]$ oc start-build bc/nodejs-hello
+[student@workstation DO180-apps]$ oc logs -f bc/nodejs-hello
+[student@workstation DO180-apps]$ oc get pods
+[student@workstation DO180-apps]$ oc logs dc/nodejs-hello
+
+8.- Fix Error 2: shoot script
+--------
+[student@workstation DO180-apps]$ vim ~/DO180-apps/nodejs-helloworld/package.json
+...
+
+ "description": "Hello World!",
+ "main": "app.js",
+ "scripts": {
+	"start": "node app.js"
+ },
+ "author": "Red Hat Training",
+...
+[student@workstation DO180-apps]$ git commit -am "Added start up script"
+[student@workstation DO180-apps]$ git push
+[student@workstation DO180-apps]$ oc start-build bc/nodejs-hello
+[student@workstation DO180-apps]$ oc get pods -w
+[student@workstation DO180-apps]$ oc logs dc/nodejs-hello
+
+9.- Expose Application
+--------
+[student@workstation DO180-apps]$ oc expose svc/nodejs-hello
+[student@workstation DO180-apps]$ oc get route -o yaml
+[student@workstation DO180-apps]$ curl -w "\n" http://nodejs-hello-nodejs.apps.cluster.lab.example.com
+
+10.- Finish
+--------
+[student@workstation ~]$ lab troubleshoot-s2i finish
+
+----------
+GUIDED 2 - Configuring Apache Container Logs for Debugging
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab troubleshoot-container start
+
+1.- Edit Apache httpd.conf
+--------
+[student@workstation ~]$ vim /home/student/DO180/labs/troubleshoot-container/conf/httpd.conf
+....
+ErrorLog /dev/stdout
+....
+LogLevel debug
+....
+CustomLog /dev/stdout common
+....
+
+
+2.- Build Container
+-----
+[student@workstation ~]$ cd ~/DO180/labs/troubleshoot-container
+[student@workstation troubleshoot-container]$ sudo podman build  -t troubleshoot-container .
+[student@workstation ~]$ sudo podman images
+
+3.- Run Container
+----
+[student@workstation ~]$ sudo podman run --name troubleshoot-container -d -p 10080:80 troubleshoot-container
+
+4.- Check Logs
+------
+[student@workstation ~]$ sudo podman logs -f troubleshoot-container
+[student@workstation ~]$ curl http://127.0.0.1:10080
+[student@workstation ~]$ sudo podman logs troubleshoot-container
+
+5.- Finish
+------
+[student@workstation ~]$ lab troubleshoot-container finish
+
+----------
+LAB - Troubleshooting Containerized Applications
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab troubleshoot-review start
+
+1.- Load Environment
+--------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+
+2.- Choose Master branch
+--------
+[student@workstation ~]$ cd ~/DO180-apps
+[student@workstation DO180-apps]$ git checkout master
+
+3.- Push to Git Remote
+--------
+[student@workstation DO180-apps]$ git checkout -b troubleshoot-review
+[student@workstation DO180-apps]$ git push -u origin troubleshoot-review
+
+4.- Login to OpenShift
+--------
+[student@workstation nodejs]$ oc login -u ${RHT_OCP4_DEV_USER} -p ${RHT_OCP4_DEV_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+5.- Create Project
+--------
+[student@workstation nodejs]$ oc new-project ${RHT_OCP4_DEV_USER}--nodejs-app
+
+6.- Create Application
+--------
+[student@workstation ~]$ oc new-app --as-deployment-config https://github.com/CesarTest/DO180-apps#troubleshoot-review --context-dir nodejs-app --name nodejs-dev
+[student@workstation ~]$ oc get pods 
+[student@workstation ~]$ oc logs -f bc/nodejs-dev 
+
+7.- Repair Application
+--------
+[student@workstation ~]$ cd nodejs-app 
+[student@workstation ~]$ vim package.json
+...output omitted...
+ "dependencies": {
+    "express": "4.x"
+ }
+}
+
+[student@workstation ~]$ git commit -am "Change App dependencies"
+[student@workstation ~]$ git push
+
+8.- Rebuild Application
+--------
+[student@workstation DO180-apps]$ oc start-build bc/nodejs-dev
+[student@workstation DO180-apps]$ oc get pods
+[student@workstation DO180-apps]$ oc logs -f dc/nodejs-dev
+
+9.- Identify Run-Time Problem
+--------
+Error: missing dependency "http-error" (module name = http-errors, spelling error)
+
+10.- Fix the problem
+--------
+[student@workstation DO180-apps]$ vim server.js
+....
+require ('http-errors')
+....
+
+[student@workstation DO180-apps]$ git commit -am "Fix Source Code error"
+[student@workstation DO180-apps]$ git push
+[student@workstation DO180-apps]$ oc start-build bc/nodejs-dev
+[student@workstation DO180-apps]$ oc get pods
+
+11.- Create the route
+--------
+[student@workstation DO180-apps]$ oc expose svc/nodejs-dev
+[student@workstation DO180-apps]$ oc status | grep -o "http:.*com"
+[student@workstation DO180-apps]$ curl http://nodejs-dev-developer--nodejs-app.${RHT_OCP4_WILDCARD_DOMAIN}
+[student@workstation DO180-apps]$ oc logs -f dc/nodejs-dev
+[student@workstation DO180-apps]$ git commit -am "Fix Source Code error"
+[student@workstation DO180-apps]$ git push
+[student@workstation DO180-apps]$ oc start-build bc/nodejs-dev
+[student@workstation DO180-apps]$ oc get pods
+[student@workstation DO180-apps]$ oc delete route nodejs-dev
+[student@workstation DO180-apps]$ oc expose svc/nodejs-dev --hostname=nodejs-dev-developer-nodejs-app.${RHT_OCP4_WILDCARD_DOMAIN}
+[student@workstation DO180-apps]$ curl http://nodejs-dev-developer-nodejs-app.${RHT_OCP4_WILDCARD_DOMAIN}
+
+12.- Finish
+--------
+[student@workstation ~]$ lab troubleshoot-review grade
+[student@workstation ~]$ lab troubleshoot-review finish

@@ -1,0 +1,45 @@
+EJERCICIO TETRIS   			Last Update: 4-Octubre-20
+================
+
+Se va a desplegar la aplicación Tetris, un juego desarrollado en los 80 por el ruso Alekséi Pázhitnov.
+
+1.- Se hará un fork de una versión del juego cuyo código fuente está en:
+
+	https://github.com/KonradSchieban/tetris
+
+   en el usuario Git del alumno.
+
+2.- Usando el usuario de OCP "developer", se desplegará en el clúster OpenShift la aplicación usando el código fuente del Git del usuario en el proyecto "mi-tetris" donde todos los recursos tendrán el nombre "tetris" y a etiqueta "juego" con valor "tetris".
+
+   ¡OJO! Se utilizará el código fuente y no el Dockerfile que existe en el repositorio Git.
+  Para ello hay que asegurarse de que el recurso BC tiene en el atributo "stragy", el valor "source".
+
+3.- Se creará la ruta llamada "juegatetris" en la URL "playtetris.<dominio-ocp>" y se comprobará que el Tetris funciona.
+
+4.- Eliminar el proyecto "mi-tetris"·
+
+
+----------
+PASO 1 - CREAR PROYECTO 
+----------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc new-project mi-tetris 
+
+----------
+PASO 2 - CREAR APLICACION 
+----------
+[student@workstation ~]$ oc new-app --name=tetris -l juego=tetris --strategy=source --as-deployment-config httpd~https://github.com/CesarTest/tetris
+
+----------
+PASO 3 - CREAR LA RUTA 
+----------
+[student@workstation ~]$ oc expose service tetris --name=tetris --hostname=playtetris.${RHT_OCP4_WILDCARD_DOMAIN}
+
+----------
+PASO 4 - ELIMINAR PROYECTO 
+----------
+[student@workstation ~]$ oc delete project mi-tetris 
+
+------
+oc get all
+oc get secrets,pvc,scc,sa

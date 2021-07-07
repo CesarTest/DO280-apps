@@ -1,0 +1,203 @@
+=========================
+TEMA 3 - MANAGING CONTAINERS
+=========================
+
+----------
+GUIDED 1 - Managing a MySQL Container
+----------
+=> Launch MySQL & Feed database
+=> Launch MySQL, but CMD=bash... container dies after exiting bash
+
+0.- Start
+--------
+[student@workstation ~]$ lab manage-lifecycle start
+
+1.- Run MySQL
+--------
+[student@workstation ~]$ sudo podman run --name mysql-db rhscl/mysql-57-rhel7
+[student@workstation ~]$ sudo podman logs mysql-db
+
+2.- New MySQL Container
+--------
+[student@workstation ~]$ sudo podman run --name mysql -d -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55 -e MYSQL_DATABASE=items -e MYSQL_ROOT_PASSWORD=r00tpa55 rhscl/mysql-57-rhel7
+
+3.- List containers
+--------
+[student@workstation ~]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Status}}"
+
+4.- Check  
+--------
+[student@workstation ~]$ sudo podman inspect -f '{{ .NetworkSettings.IPAddress }}' mysql
+
+5.- Feed database  
+--------
+[student@workstation ~]$ mysql -uuser1 -h 10.88.0.5 -pmypa55 items < /home/student/DO180/labs/manage-lifecycle/db.sql
+
+6.- Run mysql 2, but CMD= /bin/bash instead of mysql  
+--------
+[student@workstation ~]$ sudo podman run --name mysql-2  -it rhscl/mysql-57-rhel7 /bin/bash
+bash-4.2$ 
+
+7.- Test error, MySQL is not launched
+--------
+bash-4.2$ mysql -uroot
+
+8.- Exit
+--------
+bash-4.2$ exit
+
+9.- Check podman
+--------
+[student@workstation ~]$ sudo podman ps -a  --format="{{.ID}} {{.Names}} {{.Status}}"
+
+10.- Run MySQL
+--------
+[student@workstation ~]$ sudo podman exec mysql /bin/bash  -c 'mysql -uuser1 -pmypa55 -e "select * from items.Projects;"'
+
+11.-  Finish
+--------
+[student@workstation ~]$ lab manage-lifecycle finish
+
+----------
+GUIDED 2 - Persisting a MySQL Database
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab manage-storage start
+
+1.- Create persistent folder 
+--------
+[student@workstation ~]$ sudo mkdir -pv /var/local/mysql
+[student@workstation ~]$ sudo semanage fcontext -a -t container_file_t '/var/local/mysql(/.*)?'
+[student@workstation ~]$ sudo restorecon -R /var/local/mysql
+[student@workstation ~]$ ls -ldZ /var/local/mysql
+[student@workstation ~]$ sudo chown -Rv 27:27 /var/local/mysql
+
+2.- Mount persistent folder in the container 
+... -d: background
+... -v: volume to mount
+... -e: context
+---------
+[student@workstation ~]$ sudo chown -Rv 27:27 /var/local/mysql
+[student@workstation ~]$ sudo podman run --name persist-db  -d -v /var/local/mysql:/var/lib/mysql/data  -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55  -e MYSQL_DATABASE=items -e MYSQL_ROOT_PASSWORD=r00tpa55  rhscl/mysql-57-rhel7
+[student@workstation ~]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Status}}"
+
+3.- Test persisten folder
+---------
+[student@workstation ~]$ ls -ld /var/local/mysql/items
+
+4.-  Finish
+--------
+[student@workstation ~]$ lab manage-storage finish
+
+
+----------
+GUIDED 3 - Loading database
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab manage-networking start
+
+
+1.-Start MySQL with external access at 13306
+--------
+[student@workstation ~]$ sudo podman run --name mysqldb-port  -d -v /var/local/mysql:/var/lib/mysql/data -p 13306:3306  -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55  -e MYSQL_DATABASE=items -e MYSQL_ROOT_PASSWORD=r00tpa55  rhscl/mysql-57-rhel7
+
+2.- Status of the Container
+--------
+[student@workstation ~]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Ports}}"
+
+
+3.- Feed the database
+--------
+[student@workstation ~]$ mysql -uuser1 -h 127.0.0.1 -pmypa55 -P13306 items < /home/student/DO180/labs/manage-networking/db.sql
+
+4.- Verify database properly loaded
+--------
+[student@workstation ~]$ sudo podman exec -it mysqldb-port /opt/rh/rh-mysql57/root/usr/bin/mysql -uroot items -e "SELECT * FROM Item"
+
+5.- Access to database from external port
+--------
+[student@workstation ~]$ mysql -uuser1 -h 127.0.0.1 -pmypa55 -P13306 items -e "SELECT * FROM Item"
+
+6.- Access to database within the container
+--------
+[student@workstation ~]$ sudo podman exec -it mysqldb-port /bin/bash
+bash-4.2$ 
+bash-4.2$ mysql -uroot items -e "SELECT * FROM Item"
+bash-4.2$ exit
+
+7.- Finish
+--------
+[student@workstation ~]$ lab manage-networking finish
+
+
+----------
+LAB - Managing Containers
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab manage-review start
+
+1.- Create /var/local/mysql with SELINUX contextlab manage-review grade
+--------
+[student@workstation ~]$ sudo mkdir -pv /var/local/mysql
+[student@workstation ~]$ sudo semanage fcontext -a -t container_file_t '/var/local/mysql(/.*)?'
+[student@workstation ~]$ sudo restorecon -R /var/local/mysql
+[student@workstation ~]$ ls -ldZ /var/local/mysql
+[student@workstation ~]$ sudo chown -Rv 27:27 /var/local/mysql
+
+2.- Run container My-SQL-1
+--------
+... -d: background
+... -v: volume to mount
+... -e: context
+---------
+[student@workstation ~]$ sudo podman run --name mysql-1 -d -v /var/local/mysql:/var/lib/mysql/data -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55  -e MYSQL_DATABASE=items -e MYSQL_ROOT_PASSWORD=r00tpa55  rhscl/mysql-57-rhel7
+[student@workstation ~]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Status}}"
+
+3.- Feed database
+--------
+[student@workstation ~]$ sudo podman inspect -f '{{ .NetworkSettings.IPAddress }}' mysql-1
+[student@workstation ~]$ mysql -uuser1 -h 10.88.0.11 -pmypa55 items < /home/student/DO180/labs/manage-review/db.sql 
+[student@workstation ~]$ sudo podman exec mysql-1 /bin/bash  -c 'mysql -uuser1 -pmypa55 -e "select * from items.Item;"'
+
+4.- Stop Gracefully
+--------
+[student@workstation ~]$ sudo podman stop mysql-1 
+
+5.- Run container mysql-2
+--------
+[student@workstation ~]$ sudo podman run --name mysql-2 -d -v /var/local/mysql:/var/lib/mysql/data -e MYSQL_USER=user1 -e MYSQL_PASSWORD=mypa55  -e MYSQL_DATABASE=items -e MYSQL_ROOT_PASSWORD=r00tpa55 -p 13306:3306 rhscl/mysql-57-rhel7
+[student@workstation ~]$ sudo podman ps --format="{{.ID}} {{.Names}} {{.Status}}"
+
+6.- Dump list of containers
+--------
+[student@workstation ~]$ sudo podman ps -a > /tmp/my-containers
+
+7.- Check that database is accesible
+--------
+[student@workstation ~]$ sudo podman exec -it mysql-2 /bin/bash
+bash-4.2$ 
+bash-4.2$ mysql -uuser1 -pmypa55 -e "select * from items.Item;"
+bash-4.2$ exit
+
+8.- Using port forwarding insert new row
+--------
+[student@workstation ~]$ mysql -uuser1 -h 127.0.0.1 -pmypa55 -P13306 items
+MySQL [items] >INSERT INTO Item (description, done) VALUES ('Finished lab', '1'); 
+MySQL [items] > exit
+
+9.- Remove container
+--------
+[student@workstation ~]$ sudo podman ps -a --format="{{.ID}} {{.Names}} {{.Status}}"
+[student@workstation ~]$ sudo podman rm "c903d..."
+
+10.- Finish
+--------
+[student@workstation ~]$ lab manage-review grade
+[student@workstation ~]$ lab manage-review finish
+

@@ -1,0 +1,70 @@
+EJERCICIO CAMBIO DE IDIOMA EL SEÑOR DE LOS ANILLOS		- Last Update: 22-Septiembre-20
+==================================================
+
+Se va a desplegar una aplicación web sobre la película de "El Señor de los Anillos" con la información en español. 
+
+Se deben realizar las tareas:
+
+
+1.- Clonar en la cuenta Git del usuario el código fuente:
+
+	https://github.com/SparhawkTheArtist/Lord-of-the-Rings
+
+2.- Desplegar la app en el proyecto "<usuario>-trailer" y crear una ruta en la URL:
+
+	<usuario>-trailer.<dominio-openshift>
+
+ NOTA: Es una app Apache web (usar el ImageStream httpd).
+
+  Todos los recursos deben llamarse "lord" y tener una etiqueta "app" con valor "trailer".
+
+3.- Bajar el código fuente del repositorio del usuario en "workstation" y hacer las modificaciones para que se cambie de idioma la app. Usar los videos proporcionados y el index.html ya modificado.
+
+4.- Volver a desplegar la app con el nuevo código.
+
+	
+SOLUCIÓN
+========
+
+0.- Hacer login en el clúster de OpenShift.
+
+1.- Clonar en mi cuenta de Git el código fuente:
+
+	Cargar en un navegador la web y, habiendo hecho login en GitHub con nuestro usuario, arriba a la derecha, darle a fork.
+
+2.- Desplegar la app en el proyecto "<usuario>-trailer":
+
+	oc new-project <usuario>-trailer
+
+	oc new-app httpd~https://github.com/<usuario-GIT>/Lord-of-the-Rings --name=lord -l app=trailer
+	
+	oc expose svc lord --hostname=<usuario>-trailer.<dominio-openshift>
+
+   en un navegador ver la ruta: <usuario>-trailer.<dominio-openshift>
+
+3.- En workstation obtener el código fuente de mi página de GitHub, hacer:
+
+	cd ~/Apps;
+	git clone https://github.com/<usuarioGIT>/Lord-of-the-Rings
+	cd Lord-of-The-Rings
+	vim index.html		<- hacer cambios o cp <dir>/index.html ./
+	
+	cp <dir>/Trailer_espa.mp4 ./video/trailer.mp4
+	cp <dir>/Trailer_espa.webm ./video/trailer.webm
+
+	git add .
+	git commit -m "cambio de idioma"
+	git push
+
+4.- Lanzamos una nueva construcción:
+
+	oc start-build lord
+	
+  vemos el cambio en el navegador recargando la web.
+
+5.- Eliminamos el proyecto:
+
+	oc delete project <usuario>-trailer
+
+FIN
+	

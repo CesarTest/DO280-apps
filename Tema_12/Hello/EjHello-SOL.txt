@@ -1,0 +1,119 @@
+EJERCICIO HELLO - SOLUCIÓN			Last Update:  7-Mayo-2021
+===============
+
+Se desplegará la app "Hello OpenShift" con los requisitos:
+
+	* <nombre>: nombre del alumno
+
+	* Proyecto:
+		Nombre de proyecto: <nombre>-hello
+		Descripción: This is an example project to demonstrate OpenShift
+		Display: Hello OpenShift
+
+	* Crear un repositorio en la cuenta Git del usuario llamado "hello-openshift" que contenga el fichero "hello_openshift.go" 
+
+	* Desplegar la app usando S2I con el usuario "developer" de forma que todos los recursos tengan el mismo nombre "hello".
+
+	* Crear una ruta con la URL: hello-<nombre>.<dominio_OCP>.
+
+	* Una vez desplegada, cambiar el mensaje que da la app usando en la variable de entorno del contenedor del pod "RESPONSE" el valor "Hola OpenShift". 
+
+	¡OJO! No se pide cambiar el código fuente de la app
+
+	* Borrar el proyecto creado una vez terminado
+
+
+SOLUCIÓN
+--------
+
+1.- Entrar en GitHub con el login y password del usuario y arriba a la izquierda en "Repositories" pulsar en "+" y en "Repository name" poner "hello-openshift" y botón "Create Repository".
+
+2.- Una vez obtenido el fichero "hello_openshift.go", subirlo a GitHub:
+
+	mkdir ~/Apps/Hello
+	cd ~/Apps/Hello
+	cp <ruta>/hello_openshift.go ./
+	git init
+	git add .
+	git commit -m "first commit"
+	git branch -M master
+	git remote add origin https://github.com/<usuario-GIT>/hello-openshift.git
+	git push -u origin master		-> login y password en GitHub
+
+3.- Creo el proyecto tras hacer login en el cluster de OCP:
+
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWD} ${RHT_OCP4_MASTER_API}
+
+	oc new-project <nombre>-hello --display-name="Hello OpenShift" --description="This is an example project to demonstrate OpenShift" 
+
+4.- Despliego la app:
+
+	oc new-app --as-deployment-config https://github.com/<usuario-GIT>/hello-openshift --name=hello		-> No es capaz de saber la imagen de construcción a usar, qué lenguaje de programación usa
+
+  busco los IS de Golang en el proyecto "openshift"
+
+	oc get is -n openshift | grep -i golang
+
+  vuelvo a intentar el despliegue usando el ISTag golang:latest
+
+	oc new-app --as-deployment-config golang:latest~https://github.com/<usuario-GIT>/hello-openshift --name=hello
+
+  veo la construcción:
+
+	 oc logs -f build/hello-1
+	
+  veo el pod de la app ya funcionando:
+
+	oc get pod
+
+  veo el servicio:
+
+	oc get svc -> ¡NO HAY!   el contenedor del pod no expone ningun puerto.
+
+5.- Modifico el DC para que el pod exponga el puerto 8080:
+
+  veo la especificación de recurso DC con oc explain:
+
+	oc explain dc.spec.template.spec.containers.ports
+
+     	oc edit dc hello
+
+--------------------------------
+....
+ containers:
+      - image: image-registry.openshift-image-registry.svc:5000/marta-hello/hello@sha256:05580fe53f8121d1cdcdc8f45c5d345e2cb5bcc708f1a75d7a7189f0da7582b2
+        imagePullPolicy: Always
+        name: hello
+        ports:
+          - containerPort: 8080
+            name: 8080-tcp
+            protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+...
+--------------------------------
+
+6.- Creo el servicio del DC y la ruta del servicio:
+
+	oc expose dc hello
+	oc expose svc hello
+	oc get route
+
+7.- Accedo a la app desde un navegador usando la ruta.
+
+8.- Cambio el mensaje que devuelve la app.
+
+	oc set env dc/hello RESPONSE="Hola OpenShift"
+	oc get pod
+
+9.- Espero a que finalice el nuevo despliegue del pod y vuelvo a acceder a la ruta.
+
+10.- Borro el proyecto:
+
+	oc delete project <nombre>-hello
+
+FIN
+
+REF.: https://github.com/openshift/origin/tree/master/examples/hello-openshift
+	
+

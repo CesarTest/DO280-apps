@@ -1,0 +1,15 @@
+EJERCICIO NEW TETRIS						Last Update: 4-Octubre-20
+=====================
+
+Se va a desplegar la aplicación Tetris, un juego desarrollado en los 80 por el ruso Alekséi Pázhitnov.
+
+En esta ocasión se va a utilizar el código fuente de:
+
+	https://github.com/jakesgordon/javascript-tetris 
+
+
+1.- Usando el usuario de OCP "developer", se desplegará en el clúster OpenShift la app usando el código fuente dado, en el proyecto "new-tetris" donde todos los recursos tendrán el nombre "last-tetris" y la etiqueta "juego" con valor "new-tetris".
+
+2.- Se creará una ruta en la URL "nuevo-tetris.<dominio-ocp>".
+
+3.- Eliminar el proyecto "new-tetris"·

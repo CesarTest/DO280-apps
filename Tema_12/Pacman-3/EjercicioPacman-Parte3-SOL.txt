@@ -1,0 +1,83 @@
+EJERCICIO PACMAN - PARTE 3		SOLUCIÓN			Last Update: 6-Mayo-2021
+===========================
+
+Tras desplegar la aplicación Pacman del proyecto "pacman" y crear una ruta no segura (parte 1), solucionar el error de conexión a la BBDD (parte 2), ahora se va a crear una ruta securizada llamada "pacmansec" de tipo edge a la aplicación con la URL "pacman-seguro.<dominio-ocp>".
+
+
+SOLUCIÓN
+========
+
+Una vez realizado las partes 1 y 2 del ejercicio del pacman, debo tener los recursos:
+	DC:  mipacman, mongo				IS: mipacman, mongodb
+	SVC: mipacman, mongo				ROUTE: mipacman
+	BC:  mipacman					SECRET: mongo
+
+1.- Veo cual es el dominio de OpenShift en la otra ruta:
+
+	oc get route	  ->    <dominio-ocp>
+
+2.- Creo la ruta edge:
+
+	oc create route edge pacmansec --service mipacman --hostname pacman-seguro.<dominio-ocp>
+
+3.- Extraigo el certificado del router de OpenShift del operator "openshift-ingress-operator":
+
+	oc login -u admin -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+   	oc extract secrets/router-ca --keys tls.crt -n openshift-ingress-operator	-> crea el fichero tls.crt
+	
+	oc login -u developer -p ${RHT_OCP4_USER_PASSWORD} ${RHT_OCP4_MASTER_API}
+
+4.- Añado el certificado a mi navegador.
+   En el Firefox de workstation: Menú -> "Preferences" -> "Privacity & Security" -> abajo del todo "Certificates", botón "View" -> botón "Import", selecciono el fichero tls.crt
+
+  en el navegador abro la URL https://pacman-seguro.<dominio-ocp>  -> veo la app y "candadito verde"
+
+5.- Borro la ruta segura:
+
+	oc delete route pacmansec
+
+
+NOTA: Se puede hacer que si se accede por http a la ruta segura, haga la redirección a https, para esto, creo la ruta con:
+
+	oc create route edge pacmansec --service mipacman --hostname pacman-seguro.<dominio-ocp> --insecure-policy=Redirect
+	
+FIN
+
+RESUMEN DE COMANDOS PARA REALIZAR LA PARTE 1 Y 2
+-------------------------------------------------
+PARTE 1
+-------
+
+oc new-project pacman 
+
+oc new-app https://github.com/<GITHUB-USER>/pacman --name=mipacman --as-deployment-config
+
+oc expose svc mipacman
+
+PARTE 2
+-------
+
+oc import-image mongodb:2.4 --confirm --from=registry.access.redhat.com/openshift3/mongodb-24-rhel7
+
+oc create -f plantilla-modificada.yaml
+
+
+oc new-app --template=mongodb-ephemeral-custom -p MONGODB_USER=gamer -p MONGODB_PASSWORD=results -p MONGODB_DATABASE=pacman -p MONGODB_ADMIN_PASSWORD=results -p NAMESPACE=pacman
+
+oc scale dc/mipacman --replicas=0
+
+oc set env dc/mipacman MONGO_AUTH_USER= MONGO_AUTH_PWD= MONGO_DATABASE=
+
+oc edit dc mipacman	-> modificar valores variables de entorno anteriores
+
+oc set env dc mipacman MONGO_PORT=27017
+
+oc scale dc/mipacman --replicas=1
+
+MIPOD=$(oc get pod | grep -i running | grep pacman | cut -d ' ' -f1)
+oc logs -f $MIPOD  	-> Todo OK
+
+
+
+

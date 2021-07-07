@@ -1,0 +1,116 @@
+PARTE EXTRA EJERCICIO P3-1				Last Update. 1-octubre-2020
+===========================
+
+1.- Crear un fichero de htpasswd en /tmp/usuarios con los usuarios:
+
+	USUARIO		PASSWORD
+       -----------------------------
+	burr		sutter
+	edson		yanaga
+	kamesh 		sampath
+	alex		soto
+
+NOTA: Estos usuarios son las personas que se encargan del programa Developers de Red Hat (¡¡¡los gurus!!!). Se puede ver en https://developers.redhat.com/about
+
+2.- El secret del auth provider se debe llamar "mihtpasswd".
+
+3.- Configurar este fichero de htpasswd como auth provider.
+	
+4.- Verificar que puedo hacer login al cluster con los usuarios.
+
+5.- Crear los grupos de usuarios llamados "javadevs" y "otrodevs" donde Burr, Edson y Alex pertenecen al primer grupo y Kamesh al segundo.
+    Al grupo de "javadevs" le doy permisos para ver recursos del clúster y al grupo "otrodevs" permisos totales en el clúster.
+
+6.-Para volver a tener el entorno como debe estar para el resto de ejercicios, ejecutar:
+
+	 lab auth-provider start
+	 lab auth-provider finish
+	 lab authorization-rbac start
+	 lab authorization-rbac finish
+ 
+
+  así se elimina todo lo realizado en este ejercicio extra.
+  
+  
+-----------------------
+Paso 1.- Crear usuarios HPass
+-----------------------
+[student@workstation ~]$ source /usr/local/etc/ocp4.config
+[student@workstation ~]$ htpasswd -c -B -b /tmp/usuarios burr   sutter
+[student@workstation ~]$ htpasswd    -B -b /tmp/usuarios edson  yanaga
+[student@workstation ~]$ htpasswd    -B -b /tmp/usuarios kamesh sampath
+[student@workstation ~]$ htpasswd    -B -b /tmp/usuarios alex   soto
+[student@workstation ~]$ cat /tmp/usuarios
+
+-----------------------
+Paso 2.- Crear el Secret
+-----------------------
+[student@workstation ~]$ WORK_DIR=~/DO280/labs/usuarios
+[student@workstation ~]$ oc login -u kubeadmin -p ${RHT_OCP4_KUBEADM_PASSWD} https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc create secret generic mihtpasswd --from-file htpasswd=/tmp/usuarios -n openshift-config
+[student@workstation ~]$ oc get secret -n openshift-config | grep mi
+[student@workstation ~]$ oc describe secret mihtpasswd -n openshift-config
+
+
+-----------------------
+Paso 3.- Cargar fichero en OAUTH
+-----------------------
+
+3.1.- Extraer Configuracion OAuth
+..........
+[student@workstation ~]$ mkdir ${WORK_DIR}
+[student@workstation ~]$ oc get oauth cluster -o yaml >   ${WORK_DIR}/oauth_usuarios.yaml
+[student@workstation ~]$ cp ${WORK_DIR}/oauth_usuarios.yaml  ${WORK_DIR}/oauth_usuarios_bk.yaml
+
+
+3.2.- Editar Spec OAuth
+..........
+[student@workstation ~]$ vim ${WORK_DIR}/oauth_usuarios.yaml
+
+apiVersion: config.openshift.io/v1
+kind: OAuth
+...output omitted...
+spec:
+ identityProviders:
+ - htpasswd:
+      fileData:
+         name: mihtpasswd
+   mappingMethod: claim
+   name: myusers
+   type: HTPasswd
+
+3.3.- Cargar config del OAuth
+..........
+[student@workstation ~]$ cat ${WORKDIR}/oauth_usuarios.yaml
+[student@workstation ~]$ oc apply -f ${WORKDIR}/oauth_usuarios.yaml
+[student@workstation ~]$ oc get pods -n openshift-authentication
+
+-----------------------
+Paso 4.- Verificar Login con usuarios
+-----------------------
+[student@workstation ~]$ oc login -u burr   -p sutter
+[student@workstation ~]$ oc login -u edson	-p yanaga
+[student@workstation ~]$ oc login -u kamesh -p sampath
+[student@workstation ~]$ oc login -u alex	-p soto
+
+-----------------------
+Paso 5.- Crear grupos de usuarios
+-----------------------
+5.1.- Crear los usuarios
+..........
+[student@workstation ~]$ 
+
+5.2.- Crear Grupos
+..........
+
+
+5.3.- Asignar Permisos
+..........
+
+
+
+
+
+
+  
+  

@@ -1,0 +1,158 @@
+=========================
+TEMA 11 - CONFIGURING APPLICATION SECURITY
+=========================
+
+----------
+GUIDED 1 - Managing Sensitive Information With Secrets
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab authorization-secrets start
+
+1.- Create Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project authorization-secrets
+
+2.- Create Secret  
+--------
+[student@workstation ~]$ oc create secret generic mysql --from-literal user=myuser --from-literal password=redhat123 --from-literal database=test_secrets --from-literal hostname=mysql 
+
+3.- Deploy App
+--------
+[student@workstation ~]$ oc new-app --name mysql --docker-image registry.access.redhat.com/rhscl/mysql-57-rhel7:5.7-47
+[student@workstation ~]$ oc get pods -w
+[student@workstation ~]$ oc set env deployment/mysql --from secret/mysql  --prefix MYSQL_
+[student@workstation ~]$ oc set volume deployment/mysql --add --type secret --mount-path /run/secrets/mysql --secret-name mysql
+[student@workstation ~]$ oc get pods
+
+4.- 
+--------
+[student@workstation ~]$ oc rsh mysql-7cd7499d66-gm2rh
+sh-4.2$ mysql -u myuser --password=redhat123 test_secrets -e 'show databases;'
+sh-4.2$ df -h | grep mysql
+sh-4.2$ for FILE in $(ls /run/secrets/mysql) ; do  echo "${FILE}: $(cat /run/secrets/mysql/${FILE})" ; done
+sh-4.2$ exit
+
+5.- 
+--------
+[student@workstation ~]$ oc new-app --name quotes --docker-image quay.io/redhattraining/famous-quotes:2.1
+[student@workstation ~]$ oc get pods -l deployment=quotes -w
+
+6.- 
+--------
+[student@workstation ~]$ oc set env deployment/quotes --from secret/mysql --prefix QUOTES_
+[student@workstation ~]$ oc get pods -l deployment=quotes
+
+7.- 
+--------
+[student@workstation ~]$ oc logs quotes-77df54758b-mqdtf | head -n2
+[student@workstation ~]$ oc expose service quotes --hostname quotes.apps.ocp4.example.com
+[student@workstation ~]$ oc get route quotes
+[student@workstation ~]$ curl -s http://quotes.apps.ocp4.example.com/env | grep QUOTES_
+[student@workstation ~]$ curl -s http://quotes.apps.ocp4.example.com/status
+
+8.- 
+--------
+[student@workstation ~]$ oc delete project authorization-secrets
+
+9.- Finish
+--------
+[student@workstation ~]$ lab authorization-secrets finish
+
+----------
+GUIDED 2 - Controlling Application Permissions with Security Context Constraints
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab authorization-scc start
+
+1.- Create Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project authorization-scc
+
+2.- Deploy application GitLab (GIT Server)... check error while mounting volume due to no mount permissions
+--------
+[student@workstation ~]$ oc new-app --name gitlab  --docker-image quay.io/redhattraining/gitlab-ce:8.4.3-ce.0
+[student@workstation ~]$ oc get pods
+[student@workstation ~]$ oc logs pod/gitlab-7d67db7875-gcsjl
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc get pod/gitlab-7d67db7875-gcsjl -o yaml | oc adm policy scc-subject-review -f -
+
+3.- Create special Service Account with Anyuid user
+--------
+[student@workstation ~]$ oc create sa gitlab-sa
+[student@workstation ~]$ oc adm policy add-scc-to-user anyuid -z gitlab-sa
+
+4.- Log as Developer + Associate Service Account
+--------
+[student@workstation ~]$ oc login -u developer -p developer
+[student@workstation ~]$ oc set serviceaccount deployment/gitlab gitlab-sa
+[student@workstation ~]$ oc get pods
+
+5.- Expose Application
+--------
+[student@workstation ~]$ oc expose service/gitlab --port 80  --hostname gitlab.apps.ocp4.example.com
+[student@workstation ~]$ oc get routes
+[student@workstation ~]$ curl -s http://gitlab.apps.ocp4.example.com/users/sign_in | grep '<title>'
+
+6.- Remove  Project
+--------
+[student@workstation ~]$ oc delete project authorization-scc
+
+7.- Finish
+--------
+[student@workstation ~]$ lab authorization-scc finish
+
+
+----------
+LAB - Configuring Application Security
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab authorization-review start
+
+1.- Create Project  
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project authorization-review
+
+2.- Create secret with Installation Properties 
+--------
+[student@workstation ~]$ oc create secret generic review-secret  --from-literal user=wpuser --from-literal password=redhat123  --from-literal database=wordpress
+
+3.- Deploy Application
+--------
+[student@workstation ~]$ oc new-app --name mysql  --docker-image registry.access.redhat.com/rhscl/mysql-57-rhel7:5.7-47
+[student@workstation ~]$ oc set env deployment/mysql --prefix MYSQL_ --from secret/review-secret
+[student@workstation ~]$ watch oc get pods
+
+4.- Check error
+--------
+[student@workstation ~]$ oc new-app --name wordpress  --docker-image quay.io/redhattraining/wordpress:5.3.0  -e WORDPRESS_DB_HOST=mysql  -e WORDPRESS_DB_NAME=wordpress
+[student@workstation ~]$ oc set env deployment/wordpress  --prefix WORDPRESS_DB_ --from secret/review-secret
+[student@workstation ~]$ watch oc get pods -l deployment=wordpress
+[student@workstation ~]$ oc logs wordpress-68c49c9d4-wq46g
+
+5.- Fix error
+--------
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc get pod/wordpress-68c49c9d4-wq46g -o yaml  | oc adm policy scc-subject-review -f -
+[student@workstation ~]$ oc create serviceaccount wordpress-sa
+[student@workstation ~]$ oc adm policy add-scc-to-user anyuid -z wordpress-sa
+[student@workstation ~]$ oc set serviceaccount deployment/wordpress  wordpress-sa
+[student@workstation ~]$ watch oc get pods -l deployment=wordpress
+
+6.- Expose Service
+--------
+[student@workstation ~]$ oc expose service/wordpress  --hostname wordpress-review.apps.ocp4.example.com
+[student@workstation ~]$ curl -s  http://wordpress-review.apps.ocp4.example.com/wp-admin/install.php | grep Installation
+
+7.- Finish
+--------
+[student@workstation ~]$ lab authorization-review grade 
+[student@workstation ~]$ lab authorization-review finish

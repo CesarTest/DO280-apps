@@ -1,0 +1,36 @@
+=========================
+TEMA 1 - CONTAINERIZED SERVICES
+=========================
+
+---------
+GUIDED 1 - CONFIGURACION LAB
+---------
+
+1.- Variables entorno
+......
+[student@workstation ~]$ vim ~/.bashrc
+source /usr/local/etc/ocp4.config
+
+[student@workstation ~]$ . ~/.bashrc
+
+2.- Cuentas Github, Quay
+.......
+lab-configure 
+
+Enter the GitHub account name: CesarTest
+Verifying GitHub account name: CesarTest
+
+Enter the Quay.io account name: andepiel45
+Verifying Quay.io account name: andepiel45
+
+3.- Clonar repositorio
+.......
+3.1.- Log-In cuenta GitHub
+Web Browser -> https://github.com/login
+
+3.2.- Ir a URL
+Web Browser -> https://github.com/RedHatTraining/
+Click Fork
+
+3.3.- Desde PC, ejecutar Clone
+git clone https://github.com/${RHT_OCP4_GITHUB_USER}/DO180-apps

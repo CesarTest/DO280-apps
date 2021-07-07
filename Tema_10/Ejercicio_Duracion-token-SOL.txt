@@ -1,0 +1,105 @@
+EJERCICIO: MODIFICACIÓN DEL TIEMPO DE DURACIÓN DEL TOKEN DE AUTENTICACIÓN		Last Update: 30-Septiembre-2020
+==========================================================================
+
+Se debe modificar la duración del token de autenticación de las 24 por defecto a 8 horas.
+
+La configuración de este parámetro, la podemos encontrar en la documentación oficial del
+producto que proporciona Red Hat.
+
+NOTA: Este ejercicio es un ejemplo de la diferencia entre oc apply y oc replace.
+
+
+SOLUCIÓN
+=========
+
+PREVIO: Busco en la documentación oficial de Red Hat:
+
+	docs.redhat.com -> OpenShift Container Platform -> 4.5
+	
+	en el pdf de "Authentication and Authorization" la cadena "token duration"
+
+	Capítulo 2 -> 2.4 "Configuring the internal OAuth server’s token duration"
+
+   y veo que me dan la configuración de este parámetro del recurso OAuth:
+
+------------------------------------------------------------
+apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+spec:
+  tokenConfig:
+    accessTokenMaxAgeSeconds: 172800 	-> Ejemplo de duración 48 horas
+------------------------------------------------------------
+
+Calculo 8 horas en segundos: 8x60x60=28800
+
+SOLUCIÓN 1
+----------
+Voy a usar oc replace -> reemplazo por completo el recurso existente en OpenShift por el que esté en el fichero que paso.
+
+1.- Obtengo la configuración del recurso existente y la dejo en el fichero "mioauth.yaml":
+
+	oc get -o yaml oauth cluster > mioauth.yaml
+
+2.- Hago una copia por si algo saliese mal:
+
+	cp mioauth.yaml mioauth.yamlORIG
+
+3.- Modifico el recurso del fichero añadiendo la configuración que saqué de la documentación:
+
+	oc vim mioauth.yaml
+---------------------------------------------------------------
+apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+spec:
+  identityProviders:
+  - name: my_htpasswd_provider
+    mappingMethod: claim
+    type: HTPasswd
+    htpasswd:
+      fileData:
+        name: htpasswd-secret
+  tokenConfig:						<- NUEVO
+    accessTokenMaxAgeSeconds: 28800 			<- NUEVO
+-------------------------------------------------------------------
+
+4.- Reemplazo el recurso existente por el que está en el fichero:
+
+	oc replace -f mioauth.yaml
+
+5.- Verifico:
+
+	oc describe oauth cluster		-> Veo el Identity Provider Htpasswd y los 28800 segundos
+
+FIN
+
+SOLUCIÓN 2
+----------
+Voy a usar oc apply -> aplico cambios a lo existente, sólo modifico lo que esté en el fichero que paso.
+
+1.- Crear el fichero "modificacion.yaml" con la configuración que saqué de la documentación:
+
+------------------------------------------
+apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+spec:
+  tokenConfig:
+    accessTokenMaxAgeSeconds: 28800
+-------------------------------------------
+
+2.- Aplico el cambio en el CR Oauth:
+
+	oc apply -f modificacion.yaml
+
+3.- Verifico:
+
+	oc describe oauth cluster		-> Veo que está a 28800 y que está el Identity Provider Htpasswd
+
+FIN
+
+

@@ -1,0 +1,12 @@
+EJERCICIO PACMAN - PARTE 1						Last Update: 9-Septiembre-2020
+============================
+
+Dado el código fuente que está en:
+
+	https://github.com/burrsutter/pacman
+
+1.- Clonarlo en el GitHub del usuario.
+
+2.- Con el usuario "developer", crear un proyecto llamado "pacman" donde se desplegará dicha app. El nombre de todos los recursos debe ser "mipacman"
+
+3.- Crear una ruta para poder acceder a la app pacman desde fuera del cluster OCP

@@ -1,0 +1,295 @@
+=========================
+TEMA 12 - NETWORKING
+=========================
+
+----------
+GUIDED 1 - Troubleshooting OpenShift Software defined Networking
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab network-sdn start
+
+1.- Create Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project network-sdn
+
+2.- Create Database from Definition File 
+--------
+____ 2.1.- Desplegar base de datos
+[student@workstation ~]$ cd ~/DO280/labs/network-sdn
+[student@workstation network-sdn]$ ls
+[student@workstation network-sdn]$ oc create -f todo-db.yaml
+[student@workstation network-sdn]$ oc status
+[student@workstation network-sdn]$ oc get pods
+
+____ 2.2.- Poblar base de datos
+[student@workstation network-sdn]$ oc cp db-data.sql mysql-94dc6645b-hjjqb:/tmp/
+[student@workstation network-sdn]$ oc rsh mysql-94dc6645b-hjjqb bash
+bash-4.2$ mysql -u root items < /tmp/db-data.sql
+bash-4.2$ mysql -u root items -e "show tables;"
+bash-4.2$ exit
+
+3.- Create Front from Definition File
+--------
+[student@workstation network-sdn]$ oc create -f todo-frontend.yaml
+[student@workstation network-sdn]$ oc get pods
+
+4.- Expose Route
+--------
+[student@workstation network-sdn]$ oc expose service frontend  --hostname todo.apps.ocp4.example.com
+[student@workstation network-sdn]$ oc get routes
+Firefox -> http://todo.apps.ocp4.example.com/todo/
+
+[student@workstation network-sdn]$ oc logs frontend-57b8b445df-f56qh
+
+5.- Debug Visibilidad entre FE y Base de Datos
+--------
+[student@workstation network-sdn]$ oc get service/mysql  -o jsonpath="{.spec.clusterIP}{'\n'}"
+[student@workstation network-sdn]$ oc debug -t deployment/frontend
+sh-4.2$ curl -v telnet://172.30.103.29:3306
+
+6.- Debug Frontal... Conectividad IP servicio
+--------
+[student@workstation network-sdn]$ oc get service/frontend  -o jsonpath="{.spec.clusterIP}{'\n'}"
+[student@workstation network-sdn]$ oc debug -t deployment/mysql  --image registry.access.redhat.com/ubi8/ubi:8.0
+sh-4.4$ curl -m 10 -v http://172.30.23.147:8080
+sh-4.4$ exit
+
+7.- Debug Frontal... Conectividad IP Pod
+--------
+[student@workstation network-sdn]$ oc get pods -o wide -l name=frontend
+[student@workstation network-sdn]$ oc debug -t deployment/mysql  --image registry.access.redhat.com/ubi8/ubi:8.0
+sh-4.2$ curl -v http://10.128.2.61:8080/todo/
+sh-4.2$ exit
+
+8.- Descripción del frontal... etiquetas en Páginas Amarilles ("Service") estan mal 
+--------
+[student@workstation network-sdn]$ oc get svc
+[student@workstation network-sdn]$ oc describe svc/frontend
+[student@workstation network-sdn]$ oc describe deployment/frontend | grep Labels -A1
+
+9.- Corregir etiquetas frontal... en el servicio Paginas Amarillas ("Service"), no en los POD
+--------
+[student@workstation network-sdn]$ oc edit svc/frontend
+
+...output omitted...
+ selector:
+ name: frontend
+...output omitted...
+
+[student@workstation network-sdn]$ oc describe svc/frontend
+[student@workstation network-sdn]$ cd
+[student@workstation ~]$ oc delete project network-sdn
+
+10.- Finish
+--------
+[student@workstation ~]$ lab network-sdn finish
+
+----------
+GUIDED 2 - Exposing Applications for External Access
+----------
+.... OpenSSL
+....... 1.- Claves Privada / Publica... out= .key
+....... 2.- Solicitud certificado...    out= .csr
+....... 3.- Firmar certificado...       out= .crt
+....... Ruta necesita .key + .crt
+
+0.- Start
+--------
+[student@workstation ~]$ lab network-ingress start
+
+1.- Create Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer  https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project network-ingress
+
+2.- Create App + Plain Route
+--------
+[student@workstation ~]$ oc create -f  ~/DO280/labs/network-ingress/todo-app-v1.yaml
+[student@workstation ~]$ oc status
+[student@workstation ~]$ oc expose svc todo-http  --hostname todo-http.apps.ocp4.example.com
+[student@workstation ~]$ oc get routes
+[student@workstation ~]$ ip a | grep 172.25.250.9
+[student@workstation ~]$ cat ~/DO280/labs/network-ingress/tcpdump/command.txt
+[student@workstation ~]$ sudo tcpdump -i eth0 -A  -n port 80 | grep js
+
+3.- Create Secure Edge Route
+--------
+[student@workstation ~]$ cd ~/DO280/labs/network-ingress
+[student@workstation network-ingress]$ oc create route edge todo-https  --service todo-http  --hostname todo-https.apps.ocp4.example.com
+[student@workstation network-ingress]$ curl https://todo-https.apps.ocp4.example.com
+[student@workstation network-ingress]$ oc login -u admin -p redhat
+[student@workstation network-ingress]$ oc extract secrets/router-ca --keys tls.crt -n openshift-ingress-operator
+[student@workstation network-ingress]$ curl -I -v --cacert tls.crt https://todo-https.apps.ocp4.example.com
+[student@workstation network-ingress]$ oc login -u developer -p developer
+[student@workstation network-ingress]$ oc get svc todo-http  -o jsonpath="{.spec.clusterIP}{'\n'}"
+[student@workstation network-ingress]$ oc debug -t deployment/todo-http  --image registry.access.redhat.com/ubi8/ubi:8.0
+sh-4.4$ curl -v 172.30.102.29
+sh-4.4$ exit
+
+[student@workstation network-ingress]$ oc delete route todo-https
+
+4.- Create openSSL certificate
+--------
+[student@workstation network-ingress]$ cd certs
+[student@workstation certs]$ ls -l
+
+.... 4.1.- Clave privada (.key)
+[student@workstation certs~]$ openssl genrsa -out training.key 2048
+
+.... 4.2.- Solicitud Certificado (.csr)
+[student@workstation certs]$ openssl req -new  -subj "/C=US/ST=North Carolina/L=Raleigh/O=Red Hat/CN=todo-https.apps.ocp4.example.com"  -key training.key -out training.csr
+
+.... 4.3.- Certificado (.crt) - Se hace como si fueramos una CA
+[student@workstation certs]$ openssl x509 -req -in training.csr  -passin file:passphrase.txt  -CA training-CA.pem -CAkey training-CA.key -CAcreateserial  -out training.crt -days 1825 -sha256 -extfile training.ext
+[student@workstation certs]$ ls -l
+[student@workstation certs]$ cd ~/DO280/labs/network-ingress
+
+5.- Create secret + app
+--------
+[student@workstation network-ingress]$ oc create secret tls todo-certs  --cert certs/training.crt  --key certs/training.key
+[student@workstation network-ingress]$ oc create -f todo-app-v2.yaml
+[student@workstation network-ingress]$ oc get pods
+[student@workstation network-ingress]$ oc describe pod  todo-https-59d8fc9d47-265ds | grep Mounts -A2
+
+6.- Create 
+--------
+[student@workstation network-ingress]$ oc create route passthrough todo-https  --service todo-https --port 8443  --hostname todo-https.apps.ocp4.example.com
+[student@workstation network-ingress]$ curl -vvI  --cacert certs/training-CA.pem  https://todo-https.apps.ocp4.example.com
+
+7.- Debug IP connection
+--------
+[student@workstation network-ingress]$ oc get svc todo-https  -o jsonpath="{.spec.clusterIP}{'\n'}"
+[student@workstation network-ingress]$ oc debug -t deployment/todo-https  --image registry.access.redhat.com/ubi8/ubi:8.0
+sh-4.4$ curl -I http://172.30.121.154
+sh-4.4$ curl -s -k https://172.30.121.154:8443 | head -n5
+sh-4.4$ exit
+
+8.- Delete project
+--------
+[student@workstation network-ingress]$ cd
+[student@workstation ~]$ oc delete project network-ingress
+
+9.- Finish
+--------
+[student@workstation ~]$ lab network-ingress finish
+
+----------
+GUIDED 3 - Configuring Network Policies
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab network-policy start
+
+1.- Create Project
+--------
+[student@workstation ~]$ oc login -u developer -p developer https://api.ocp4.example.com:6443
+[student@workstation ~]$ oc new-project network-policy
+
+2.- Deploy Applications and expose them
+--------
+[student@workstation ~]$ oc new-app --name hello --docker-image  quay.io/redhattraining/hello-world-nginx:v1.0
+[student@workstation ~]$ oc new-app --name test --docker-image quay.io/redhattraining/hello-world-nginx:v1.0
+[student@workstation ~]$ oc expose service hello
+
+3.- Verify access to Test Pod... POD IP and Service IP
+--------
+[student@workstation ~]$ ~/DO280/labs/network-policy/display-project-info.sh
+[student@workstation ~]$ oc rsh test-c4d74c9d5-5pq9s curl 10.8.0.13:8080 | grep Hello
+[student@workstation ~]$ oc rsh test-c4d74c9d5-5pq9s curl 172.30.137.226:8080 | grep Hello
+[student@workstation ~]$ curl -s hello-network-policy.apps.ocp4.example.com | grep Hello
+
+4.- Create Project + Deploy another application
+--------
+[student@workstation ~]$ oc new-project network-test
+[student@workstation ~]$ oc new-app --name sample-app --docker-image quay.io/redhattraining/hello-world-nginx:v1.0
+
+5.- Verify access 
+--------
+[student@workstation ~]$ ~/DO280/labs/network-policy/display-project-info.sh
+[student@workstation ~]$ oc rsh sample-app-d5f945-spx9q curl 10.8.0.13:8080 |  grep Hello
+[student@workstation ~]$ oc rsh sample-app-d5f945-spx9q curl 10.8.0.14:8080 |  grep Hello
+
+6.- Switch project
+--------
+[student@workstation ~]$ oc project network-policy
+[student@workstation ~]$ cd ~/DO280/labs/network-policy/
+[student@workstation ~]$ vim ~/DO280/solutions/network-policy/deny-all.yaml
+....
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+ name: deny-all
+spec:
+ podSelector: {}
+.....
+
+[student@workstation network-policy]$ oc create -f deny-all.yaml
+
+7.- Verify there is no access from within the project and between projects
+--------
+[student@workstation network-policy]$ curl -s  hello-network-policy.apps.ocp4.example.com | grep Hello
+[student@workstation network-policy]$ oc rsh test-c4d74c9d5-5pq9s curl 10.8.0.13:8080 | grep Hello
+[student@workstation network-policy]$ oc project network-test
+[student@workstation network-policy]$ oc rsh sample-app-d5f945-spx9q curl 10.8.0.14:8080 | grep Hello
+
+8.- Create Network Policu that allow specific traffic
+--------
+[student@workstation network-policy]$ vim ~/DO280/solutions/network-policy/allow-specific.yaml
+
+...output omitted...
+spec:
+ podSelector:
+     matchLabels:
+       deployment: hello
+ ingress:
+    - from:
+        - namespaceSelector:
+              matchLabels:
+                  name: network-test
+          podSelector:
+              matchLabels:
+                  deployment: sample-app
+       ports:
+         - port: 8080
+           protocol: TCP
+
+[student@workstation network-policy]$ oc create -n network-policy -f  allow-specific.yaml
+[student@workstation network-policy]$ oc get networkpolicies -n network-policy
+
+
+9.- Namespace Properties
+--------
+[student@workstation network-policy]$ oc login -u admin -p redhat
+[student@workstation network-policy]$ oc label namespace network-test  name=network-test
+[student@workstation network-policy]$ oc describe namespace network-test
+
+
+10.- Verify policy... from POD sample => to POD test
+--------
+[student@workstation network-policy]$ oc rsh sample-app-d5f945-spx9q curl  10.8.0.13:8080 | grep Hello
+[student@workstation network-policy]$ oc rsh sample-app-d5f945-spx9q curl  10.8.0.13:8181 | grep Hello
+[student@workstation network-policy]$ oc rsh sample-app-d5f945-spx9q curl  10.8.0.14:8080 | grep Hello
+
+11.- 
+--------
+[student@workstation network-policy]$ vim ~/DO280/solutions/network-policy/allow-from-openshift-ingress.yaml
+[student@workstation network-policy]$ oc create -n network-policy -f  allow-from-openshift-ingress.yaml
+[student@workstation network-policy]$ oc get networkpolicies -n network-policy
+[student@workstation network-policy]$ oc login -u admin -p redhat
+[student@workstation network-policy]$ oc label namespace default  network.openshift.io/policy-group=ingress
+[student@workstation network-policy]$ curl -s  hello-network-policy.apps.ocp4.example.com | grep Hello
+
+12.- 
+--------
+[student@workstation network-policy]$ cd
+
+13.- Finish
+--------
+[student@workstation ~]$ lab network-policy finish
+
+
+
