@@ -25,7 +25,7 @@ ____ 2.1.- Desplegar base de datos
 [student@workstation network-sdn]$ oc get pods
 
 ____ 2.2.- Poblar base de datos
-[student@workstation network-sdn]$ oc cp db-data.sql mysql-94dc6645b-hjjqb:/tmp/
+[student@workstation network-sdn]$ oc cp db-data.sql mysql-94dc6645b-hjjqb:/tmps//
 [student@workstation network-sdn]$ oc rsh mysql-94dc6645b-hjjqb bash
 bash-4.2$ mysql -u root items < /tmp/db-data.sql
 bash-4.2$ mysql -u root items -e "show tables;"
@@ -44,13 +44,13 @@ Firefox -> http://todo.apps.ocp4.example.com/todo/
 
 [student@workstation network-sdn]$ oc logs frontend-57b8b445df-f56qh
 
-5.- Debug Visibilidad entre FE y Base de Datos
+5.- Debug Frontal: Visibilidad IP Servicio: FE -> BDD
 --------
 [student@workstation network-sdn]$ oc get service/mysql  -o jsonpath="{.spec.clusterIP}{'\n'}"
 [student@workstation network-sdn]$ oc debug -t deployment/frontend
 sh-4.2$ curl -v telnet://172.30.103.29:3306
 
-6.- Debug Frontal... Conectividad IP servicio
+6.- Debug BDD: Visibilidad IP Servicio: BDD -> FE
 --------
 [student@workstation network-sdn]$ oc get service/frontend  -o jsonpath="{.spec.clusterIP}{'\n'}"
 [student@workstation network-sdn]$ oc debug -t deployment/mysql  --image registry.access.redhat.com/ubi8/ubi:8.0
@@ -68,7 +68,22 @@ sh-4.2$ exit
 --------
 [student@workstation network-sdn]$ oc get svc
 [student@workstation network-sdn]$ oc describe svc/frontend
+....
+Selector: name=api
+....
+
+[student@workstation network-sdn]$ oc describe pod/frontend-5598cfc446-lkhsj 
+...output omitted...
+Labels: app=todonodejs
+        name=frontend
+		pod-template-hash=5598cfc446
+...output omitted...
+
+
 [student@workstation network-sdn]$ oc describe deployment/frontend | grep Labels -A1
+
+
+
 
 9.- Corregir etiquetas frontal... en el servicio Paginas Amarillas ("Service"), no en los POD
 --------
@@ -111,6 +126,7 @@ GUIDED 2 - Exposing Applications for External Access
 [student@workstation ~]$ oc status
 [student@workstation ~]$ oc expose svc todo-http  --hostname todo-http.apps.ocp4.example.com
 [student@workstation ~]$ oc get routes
+
 [student@workstation ~]$ ip a | grep 172.25.250.9
 [student@workstation ~]$ cat ~/DO280/labs/network-ingress/tcpdump/command.txt
 [student@workstation ~]$ sudo tcpdump -i eth0 -A  -n port 80 | grep js
@@ -291,5 +307,128 @@ spec:
 --------
 [student@workstation ~]$ lab network-policy finish
 
+----------
+LAB - Configuring OpenShift Networking for Applications
+----------
+
+0.- Start
+--------
+[student@workstation ~]$ lab network-review start
+
+1.- Login y crear el project
+--------
+[student@workstation ~]$ oc login -u developer -p developer 
+[student@workstation ~]$ oc new-project network-review
+
+2.- Deploy insecure version
+--------
+[student@workstation ~]$ cd ~/DO280/labs/network-review/
+[student@workstation ~]$ vim ~/DO280/labs/network-review/php-http.yaml
+...output omitted...
+ cpu: '0.5'
+ image: 'quay.io/redhattraining/php-ssl:v1.0'
+ name: php-http
+...output omitted...
+
+...output omitted...
+ ports:
+ - containerPort: 8080
+ name: php-http
+...output omitted...
+
+[student@workstation ~]$ oc create -f ~/DO280/labs/network-review/php-http.yaml
+[student@workstation ~]$ oc get pods
+
+3.- Expose route
+--------
+[student@workstation ~]$ oc expose svc php-http --hostname php-http.apps.ocp4.example.com
+
+4.- Create Deny All Policy
+--------
+[student@workstation ~]$ vim ~/DO280/labs/network-review/deny-all.yaml
+....
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+ name: deny-all
+spec:
+ podSelector: {}
+.....
+
+5.- Allow from Ingress Controller
+--------
+Networking => Capítulo 9
+https://access.redhat.com/documentation/en-us/openshift_container_platform/4.5/html-single/networking/index#nw-networkpolicy-object_viewing-network-policy
 
 
+[student@workstation ~]$ vim ~/DO280/labs/network-review/allow-fromopenshift-ingress.yaml
+.......
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+ name: deny-all
+spec:
+ podSelector: {}
+ ingress:
+ - from:
+    - namespaceSelector:
+         matchLabels:
+            network.openshift.io/policy-group: ingress
+ 
+.......
+
+[student@workstation network-review]$ oc login -u admin -p redhat
+[student@workstation network-policy]$ oc label namespace default network.openshift.io/policy-group=ingress
+
+6.- Create certificate autosigned
+--------
+[student@workstation network-review]$ oc login -u developer -p developer
+
+[student@workstation network-ingress]$ cd certs
+[student@workstation certs]$ ls -l
+
+.... 6.1.- Clave privada (.key)
+[student@workstation certs~]$ openssl genrsa -out training.key 2048
+
+.... 6.2.- Solicitud Certificado (.csr)
+[student@workstation certs]$ openssl req -new  -subj "/C=US/ST=North Carolina/L=Raleigh/O=Red Hat/CN=php-https.apps.ocp4.example.com"  -key training.key -out training.csr
+
+.... 6.3.- Certificado (.crt) - Se hace como si fueramos una CA
+[student@workstation certs]$ openssl x509 -req -in training.csr  -passin file:passphrase.txt  -CA training-CA.pem -CAkey training-CA.key -CAcreateserial  -out training.crt -days 1825 -sha256 -extfile training.ext
+
+7.- Create secret
+--------
+[student@workstation certs]$ oc create secret tls php-certs --cert=~/DO280/labs/network-review/certs/training.crt  --key=~/DO280/labs/network-review/certs/training.key
+
+8.- Deploy HTTS application
+--------
+[student@workstation certs]$ vim ~/DO280/labs/network-review/php-https.yaml
+...output omitted...
+ cpu: '0.5'
+ image: 'quay.io/redhattraining/php-ssl:v1.1'
+ name: php-http
+...output omitted...
+
+...output omitted...
+ ports:
+ - containerPort: 8443
+ name: php-http
+...output omitted...
+
+9.- Crear ruta passthrough
+--------
+[student@workstation certs]$ oc create route passthrough svc php-https --hostname=https.apps.ocp4.example.com 
+
+10.- Verificacion Conexion
+--------
+[student@workstation certs]$ oc extract secret/router-ca --keys router-ca.crt -n openshift-ingress-operator
+[student@workstation certs]$ curl -I -v --cacert router-ca.crt https://https.apps.ocp4.example.com
+
+11.- Grade
+--------
+[student@workstation certs]$ cd
+[student@workstation certs]$ lab network-review grade
+ 
+12.- Finish
+--------
+[student@workstation ~]$ lab network-review finish

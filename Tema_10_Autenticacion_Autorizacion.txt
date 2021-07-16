@@ -123,7 +123,8 @@ GUIDED 2 - Defining and Applying Permissions using RBAC
 2.- Add Policy to Role "self-provisioner"
 --------
 [student@workstation ~]$ oc describe clusterrolebindings self-provisioners
-[student@workstation ~]$ oc adm policy remove-cluster-role-from-group self-provisioner system:authenticated:oauth
+[student@workstation ~]$ oc adm policy remove-cluster-role-from-group --rolebinding-name  self-provisioner
+ system:authenticated:oauth
 [student@workstation ~]$ oc describe clusterrolebindings self-provisioners
 [student@workstation ~]$ oc get clusterrolebinding -o wide | grep -E 'NAME|self-provisioner'
 [student@workstation ~]$ oc login -u leader -p redhat

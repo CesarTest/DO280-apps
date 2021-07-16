@@ -53,14 +53,14 @@ GUIDED 1 - Controlling Pod Scheduling Behavior
 ...output omitted...
 
 [student@workstation ~]$ oc get pods -o wide
-[student@workstation ~]$ oc delete project schedule-pods
+[student@workstation ~]$ oc delete projectschedule-pods
 
 5.- Remove labels
 --------
 [student@workstation ~]$ oc login -u admin -p redhat
 [student@workstation ~]$ oc label node -l env env-
 
-6.- No hace scheduling porque no hay 
+6.- No hace scheduling porque no existen nodos con el Node Selector que el indica el POD
 --------
 [student@workstation ~]$ oc login -u developer -p developer
 [student@workstation ~]$ oc project schedule-pods-ts
@@ -69,7 +69,13 @@ GUIDED 1 - Controlling Pod Scheduling Behavior
 
 [student@workstation ~]$ oc describe pod hello-ts-5dbff9f44-8h7c7 
 
-#[student@workstation ~]$ oc get node -L 
+___ Localizar Node Selector en etiquetado de los Nodos
+[student@workstation ~]$ oc login -u admin -p redhat
+[student@workstation ~]$ oc describe node | more
+oc describe node | sed -n '/Label/,/: */p' 
+oc describe node | sed -n -e '/Label/,/: */p' -e '/Name:/,/: */p'  
+
+[student@workstation ~]$ oc login -u developer -p developer
 
 [student@workstation ~]$ oc edit deployment/hello-ts
 ...output omitted...
@@ -212,7 +218,7 @@ loadtest-f7495948-tlxgm 0m 20Mi
 [student@workstation ~]$ oc login -u admin -p redhat
 [student@workstation ~]$ oc create quota project-quota  --hard cpu="3",memory="1G",configmaps="3"  -n schedule-limit
 
-9.- Create Quota inside ConfigMaps
+9.- Verify Limits for Number of ConfigMaps
 --------
 [student@workstation ~]$ oc login -u developer -p developer
 [student@workstation ~]$ for X in {1..4} ; do oc create configmap my-config${X} --from-literal key${X}=value${X} ; done

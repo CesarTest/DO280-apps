@@ -11,6 +11,8 @@ GUIDED 1 - CONFIGURACION LAB
 [student@workstation ~]$ vim ~/.bashrc
 source /usr/local/etc/ocp4.config
 
+echo "source /usr/local/etc/ocp4.config" >>  ~/.bashrc
+
 [student@workstation ~]$ . ~/.bashrc
 
 2.- Cuentas Github, Quay
